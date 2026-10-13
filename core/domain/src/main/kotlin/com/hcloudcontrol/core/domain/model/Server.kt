@@ -5,7 +5,7 @@ data class Server(
     val name: String,
     val status: ServerStatus,
     val ipv4Address: String?,
-    val datacenter: String,
+    val location: String,
     val serverType: String,
 )
 

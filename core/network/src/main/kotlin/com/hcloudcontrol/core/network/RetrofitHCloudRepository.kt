@@ -16,7 +16,7 @@ internal class RetrofitHCloudRepository(private val api: HCloudApi) : HCloudRepo
             name = server.name,
             status = server.status.toServerStatus(),
             ipv4Address = server.publicNet.ipv4?.ip,
-            datacenter = server.datacenter.name,
+            location = server.location?.name ?: "Location unavailable",
             serverType = server.serverType.name,
         )
     }

@@ -168,7 +168,7 @@ private fun ServersScreen(state: ServersState, onRefresh: () -> Unit, onServerCl
 
 @Composable private fun ServerCard(server: Server, onClick: () -> Unit) = Card(Modifier.fillMaxWidth().clickable(onClick = onClick), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
     Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-        StatusDot(server.status); Spacer(Modifier.width(12.dp)); Column(Modifier.weight(1f)) { Text(server.name, style = MaterialTheme.typography.titleMedium); Text("${server.serverType} · ${server.datacenter}", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        StatusDot(server.status); Spacer(Modifier.width(12.dp)); Column(Modifier.weight(1f)) { Text(server.name, style = MaterialTheme.typography.titleMedium); Text("${server.serverType} · ${server.location}", color = MaterialTheme.colorScheme.onSurfaceVariant) }
         Column(horizontalAlignment = Alignment.End) { StatusLabel(server.status); Text(server.ipv4Address ?: "No public IPv4", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
     }
 }
@@ -185,7 +185,7 @@ private fun ServerDetails(server: Server, readOnly: Boolean, onBack: () -> Unit)
     }
     action?.let { PowerConfirmation(it, server.name, !readOnly) { action = null } }
 }
-@Composable private fun DetailsCard(server: Server) = Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) { DetailRow("Type", server.serverType); DetailRow("Datacenter", server.datacenter); DetailRow("IPv4", server.ipv4Address ?: "Not assigned"); DetailRow("Server ID", server.id.toString()) } }
+@Composable private fun DetailsCard(server: Server) = Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) { DetailRow("Type", server.serverType); DetailRow("Location", server.location); DetailRow("IPv4", server.ipv4Address ?: "Not assigned"); DetailRow("Server ID", server.id.toString()) } }
 @Composable private fun DetailRow(label: String, value: String) = Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant); Text(value, fontWeight = FontWeight.Medium) }
 private enum class PowerAction(val title: String, val explanation: String, val destructive: Boolean) { Start("Start server", "The server will boot and begin accepting traffic when ready.", false), Shutdown("Shut down server", "The operating system will receive a clean shutdown request.", true), Reset("Reset server", "This immediately restarts the server. Unsaved work may be lost.", true) }
 @Composable private fun PowerActions(status: ServerStatus, readOnly: Boolean, onAction: (PowerAction) -> Unit) = Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) { PowerButton(PowerAction.Start, status == ServerStatus.OFF && !readOnly, onAction); PowerButton(PowerAction.Shutdown, status == ServerStatus.RUNNING && !readOnly, onAction); PowerButton(PowerAction.Reset, status == ServerStatus.RUNNING && !readOnly, onAction) }
@@ -202,4 +202,4 @@ private fun SettingsScreen(activeProject: CloudProjectConnection, connections: L
     Button(onClick = onAddProject, modifier = Modifier.fillMaxWidth()) { Text("Add another Cloud project") }
     OutlinedButton(onClick = onDisconnect, modifier = Modifier.fillMaxWidth()) { Text("Remove ${activeProject.displayName}") }
 }
-@Preview(showBackground = true) @Composable private fun ServerCardPreview() { MaterialTheme(colorScheme = HCloudColors) { ServerCard(Server(1, "web-01", ServerStatus.RUNNING, "203.0.113.42", "fsn1-dc14", "cpx31"), {}) } }
+@Preview(showBackground = true) @Composable private fun ServerCardPreview() { MaterialTheme(colorScheme = HCloudColors) { ServerCard(Server(1, "web-01", ServerStatus.RUNNING, "203.0.113.42", "fsn1", "cpx31"), {}) } }
