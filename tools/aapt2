@@ -1,0 +1,24 @@
+#!/usr/bin/env sh
+set -eu
+
+# Gradle's Maven AAPT2 is x86_64. ARM64 WSL uses the current SDK copy through
+# a project-local qemu-user runner, with no Windows interop or sudo install.
+PROJECT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+TOOLCHAINS="${HCLOUD_TOOLCHAINS:-$PROJECT_DIR/.toolchains}"
+AAPT2_BINARY="${HCLOUD_X86_AAPT2:-$TOOLCHAINS/android-sdk/build-tools/36.0.0/aapt2}"
+RUNNER_DIR="${HCLOUD_QEMU_RUNNER_DIR:-$PROJECT_DIR/tools/.qemu-user}"
+QEMU="$RUNNER_DIR/usr/bin/qemu-x86_64"
+SYSROOT="$RUNNER_DIR/sysroot"
+
+[ -x "$AAPT2_BINARY" ] || {
+    echo "Android SDK AAPT2 is missing: $AAPT2_BINARY" >&2
+    exit 1
+}
+
+sh "$PROJECT_DIR/tools/provision-aapt2-runner.sh"
+
+export QEMU_LD_PREFIX="$SYSROOT"
+# QEMU executes the x86_64 process locally, so give its dynamic loader the
+# pinned host path rather than an emulated absolute path.
+export LD_LIBRARY_PATH="$SYSROOT/usr-lib-x86_64"
+exec "$QEMU" "$AAPT2_BINARY" "$@"

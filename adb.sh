@@ -1,9 +1,10 @@
 #!/usr/bin/env sh
 set -eu
 
-TOOLCHAINS=/home/ksoko/it/kite-reader-poc/.toolchains
-WINDOWS_ADB="$TOOLCHAINS/windows/platform-tools/adb.exe"
-LINUX_ADB="$TOOLCHAINS/debian-android/usr/bin/adb"
+PROJECT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+TOOLCHAINS="${HCLOUD_TOOLCHAINS:-$PROJECT_DIR/.toolchains}"
+WINDOWS_ADB="${HCLOUD_WINDOWS_ADB:-$TOOLCHAINS/windows/platform-tools/adb.exe}"
+LINUX_ADB="${HCLOUD_ADB_BIN:-${ANDROID_SDK_ROOT:-${ANDROID_HOME:-$TOOLCHAINS/android-sdk}}/platform-tools/adb}"
 
 if [ -x "$WINDOWS_ADB" ]; then
     # Wi-Fi debugging ports rotate. Discover the current TLS endpoint and
@@ -28,5 +29,5 @@ fi
 if [ -x "$LINUX_ADB" ]; then
     exec "$LINUX_ADB" "$@"
 fi
-echo "adb not found" >&2
+echo "adb not found; set HCLOUD_ADB_BIN or HCLOUD_WINDOWS_ADB" >&2
 exit 127
