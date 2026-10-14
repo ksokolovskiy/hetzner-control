@@ -44,6 +44,7 @@ import kotlinx.coroutines.withContext
 @Composable
 internal fun SshKeysScreen(projectId: String, repository: HCloudRepository) {
     var refreshGeneration by remember(projectId) { mutableStateOf(0L) }
+    var refreshing by remember(projectId) { mutableStateOf(false) }
     var state by remember(projectId) { mutableStateOf<SshKeysState>(SshKeysState.Loading) }
     val scope = rememberCoroutineScope()
     val fallback = stringResource(R.string.ssh_inventory_load_error)
@@ -52,22 +53,33 @@ internal fun SshKeysScreen(projectId: String, repository: HCloudRepository) {
     var deletingKey by remember(projectId) { mutableStateOf<SshKeyOption?>(null) }
 
     fun refresh() {
+        if (refreshing) return
+        refreshing = true
         val generation = refreshGeneration + 1
         refreshGeneration = generation
-        state = SshKeysState.Loading
+        if (state !is SshKeysState.Content) state = SshKeysState.Loading
         scope.launch {
             val result = try {
                 SshKeysState.Content(withContext(Dispatchers.IO) { repository.getSshKeys() })
             } catch (error: Throwable) {
                 SshKeysState.Error(safeApiFailureMessage(error, fallback))
             }
-            if (generation == refreshGeneration) state = result
+            if (generation == refreshGeneration) {
+                state = result
+                refreshing = false
+            }
         }
     }
 
     LaunchedEffect(projectId) { refresh() }
 
+    HCloudPullToRefresh(
+        isRefreshing = refreshing,
+        onRefresh = ::refresh,
+        modifier = Modifier.fillMaxSize(),
+    ) {
     LazyColumn(
+        state = rememberRestorableLazyListState("ssh-keys"),
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -111,6 +123,7 @@ internal fun SshKeysScreen(projectId: String, repository: HCloudRepository) {
                 }
             }
         }
+    }
     }
     if (highImpactAllowed && createDialog) {
         CreateSshKeyDialog(

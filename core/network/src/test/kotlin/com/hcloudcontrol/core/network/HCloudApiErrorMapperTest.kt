@@ -11,6 +11,15 @@ import retrofit2.Response
 
 class HCloudApiErrorMapperTest {
     @Test
+    fun `request payload sanitiser accepts object and array payloads`() {
+        val objectFailure = HCloudErrorParser.parse(400, """{ "error": { "message": "request={\\\"name\\\":\\\"private\\\"}" } }""")
+        val arrayFailure = HCloudErrorParser.parse(400, """{ "error": { "message": "request=[\\\"private\\\"]" } }""")
+
+        assertEquals("request=[REDACTED]", objectFailure.apiMessage)
+        assertEquals("request=[REDACTED]", arrayFailure.apiMessage)
+    }
+
+    @Test
     fun `mapped HTTP failure keeps raw response details out of exception text`() {
         val token = "token-should-never-reach-ui-or-logcat"
         val rootPassword = "one-time-root-password"

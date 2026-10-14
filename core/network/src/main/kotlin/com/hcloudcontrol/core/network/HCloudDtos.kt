@@ -4,13 +4,6 @@ import com.squareup.moshi.Json
 import com.squareup.moshi.JsonWriter
 import com.squareup.moshi.ToJson
 
-internal data class ProfileResponse(val profile: ProfileDto)
-internal data class ProfileDto(
-    val id: Long,
-    val name: String,
-    val email: String,
-)
-
 internal data class ServersResponse(val servers: List<ServerDto>, val meta: MetaDto? = null)
 internal data class ServerResponse(val server: ServerDto)
 internal data class ServerMetricsResponse(val metrics: ServerMetricsDto)

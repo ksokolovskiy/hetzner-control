@@ -1,0 +1,9 @@
+<resources>
+    <string name="storage_boxes_usage_formatted">Daten: %1$s von %2$s</string>
+    <string name="storage_boxes_total_formatted">Gesamt: %1$s</string>
+    <string name="storage_boxes_data_formatted">Daten: %1$s</string>
+    <string name="storage_boxes_snapshots_formatted">Snapshots: %1$s</string>
+    <string name="storage_operations_locked">Aktionen wie Erstellen, Anhängen, Trennen, Vergrößern oder Ändern des Löschschutzes sind ausgeblendet. Aktivieren Sie folgenreiche Vorgänge in den Einstellungen, um sie zu prüfen und zu verwenden.</string>
+    <string name="storage_volume_protection_details">Öffnen Sie dieses Volume, um den Löschschutz zu ändern.</string>
+    <string name="storage_inventory_description_active">Inventar von Volumes, Snapshots und Backups im aktuellen Cloud-Projekt. Prüfen Sie jede Aktion, bevor sie an Hetzner Cloud gesendet wird.</string>
+</resources>

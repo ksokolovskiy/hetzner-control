@@ -6,7 +6,8 @@ control is available in the app. It is reviewed against the official
 [changelog](https://docs.hetzner.cloud/changelog), and the separate official
 [Storage Box reference](https://docs.hetzner.cloud/reference/hetzner#tag/storage-boxes).
 The supported Cloud API surface is `api.hetzner.cloud/v1`; Storage Boxes use
-their own `api.hetzner.com/v1` token and client. Robot and the legacy DNS
+the selected project's bearer token with their own `api.hetzner.com/v1` host
+and client. Robot and the legacy DNS
 Console are deliberately out of scope.
 
 ## Status legend
@@ -45,7 +46,7 @@ Console are deliberately out of scope.
 
 | Official resource | Current coverage | Safe missing capability | Confirmation boundary |
 | --- | --- | --- | --- |
-| Storage Boxes | Independent token/profile selector; read-only list/detail, statistics and folder names. | Read-only filters/search. | Create/update/delete Storage Boxes changes billing or data access. |
+| Storage Boxes | Active-project inventory/detail, statistics and folder names via the selected project token. | Read-only filters/search. | Create/update/delete Storage Boxes changes billing or data access. |
 | Snapshots | Read-only list/detail and manually create a snapshot with explicit UI state. | Read-only action history if exposed by the API. | Delete, restore/rollback and schedule changes can lose or replace data/cost; require explicit approval. |
 | Subaccounts | Read-only identity metadata (name/username); no passwords displayed. | Read-only pagination/filter refinements. | Create/update/delete/reset-password operations alter access and need explicit confirmation. |
 

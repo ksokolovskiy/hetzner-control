@@ -23,7 +23,7 @@ import retrofit2.http.POST
 import retrofit2.http.Body
 import retrofit2.http.Query
 
-/** API surface intentionally separate from HCloudApi: it has another host and credential. */
+/** API surface intentionally separate from HCloudApi: it has another host but uses the active project token. */
 internal interface StorageBoxApi {
     @GET("storage_boxes")
     suspend fun getStorageBoxes(
@@ -286,4 +286,4 @@ private class StorageBoxBearerTokenInterceptor(private val tokenProvider: () -> 
 }
 
 /** See [MissingApiTokenException]: local credential failures must travel through Retrofit safely. */
-class MissingStorageBoxApiTokenException : IOException("Storage Box API token is not configured")
+class MissingStorageBoxApiTokenException : IOException("Active project API token is not configured for Storage Box")

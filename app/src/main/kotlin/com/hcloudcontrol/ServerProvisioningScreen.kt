@@ -95,6 +95,8 @@ private sealed interface PricingState {
 internal fun ServerProvisioningScreen(
     repository: HCloudRepository,
     isTestServer: Boolean = false,
+    initialServerType: ServerTypeOption? = null,
+    initialLocation: LocationOption? = null,
     onCancel: () -> Unit,
     onCreated: () -> Unit,
 ) {
@@ -102,9 +104,11 @@ internal fun ServerProvisioningScreen(
     var choicesState by remember { mutableStateOf<ChoicesState>(ChoicesState.Loading) }
     var reloadKey by remember { mutableStateOf(0) }
     var name by remember { mutableStateOf("") }
-    var selectedType by remember { mutableStateOf<ServerTypeOption?>(null) }
+    // Catalog and location details only choose an input.  The choices are rebound to
+    // the freshly loaded provisioning data below, so this remains the sole order form.
+    var selectedType by remember(initialServerType?.id) { mutableStateOf(initialServerType) }
     var selectedImage by remember { mutableStateOf<ImageOption?>(null) }
-    var selectedLocation by remember { mutableStateOf<LocationOption?>(null) }
+    var selectedLocation by remember(initialLocation?.id) { mutableStateOf(initialLocation) }
     var architectureFilter by remember { mutableStateOf<String?>(null) }
     var categoryFilter by remember { mutableStateOf<String?>(null) }
     var coresFilter by remember { mutableStateOf<Int?>(null) }
@@ -140,6 +144,22 @@ internal fun ServerProvisioningScreen(
             }
         } catch (throwable: Throwable) {
             ChoicesState.Failed("")
+        }
+    }
+
+    LaunchedEffect(choicesState, initialServerType?.id, initialLocation?.id) {
+        val choices = (choicesState as? ChoicesState.Ready)?.choices ?: return@LaunchedEffect
+        // Objects received by a catalog detail can be partial. Resolve them through the
+        // same data set used by the configurator; never manufacture a server choice.
+        if (selectedType?.id == initialServerType?.id) {
+            selectedType = initialServerType?.let { requested ->
+                choices.types.firstOrNull { it.id == requested.id } ?: requested
+            }
+        }
+        if (selectedLocation?.id == initialLocation?.id) {
+            selectedLocation = initialLocation?.let { requested ->
+                choices.locations.firstOrNull { it.id == requested.id } ?: requested
+            }
         }
     }
 
@@ -232,7 +252,7 @@ internal fun ServerProvisioningScreen(
                         if (selectedImage?.architecture != null && type.architecture != null && selectedImage!!.architecture != type.architecture) selectedImage = null
                     })
                     Text(stringResource(R.string.provision_selected_type, selectedType?.let { typeDescription(it) } ?: stringResource(R.string.provision_not_selected)), color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant)
-                    ChoiceField(stringResource(R.string.provision_location_label), selectedLocation?.let { "${it.name} · ${it.city ?: it.description}" } ?: stringResource(R.string.provision_location_choose), locationsForType, { "${it.name} · ${it.city ?: it.description}" }, { selectedLocation = it; if (selectedType != null && it.name !in selectedType!!.availableLocations) selectedType = null })
+                    ChoiceField(stringResource(R.string.provision_location_label), selectedLocation?.displayName() ?: stringResource(R.string.provision_location_choose), locationsForType, { it.displayName() }, { selectedLocation = it; if (selectedType != null && it.name !in selectedType!!.availableLocations) selectedType = null })
                     ChoiceField(stringResource(R.string.provision_type_label), selectedType?.let { typeDescription(it) } ?: stringResource(R.string.provision_type_choose), typesForLocation, { type -> typeDescription(type) }, { selectedType = it; if (selectedLocation != null && selectedLocation!!.name !in it.availableLocations) selectedLocation = null; if (selectedImage?.architecture != null && it.architecture != null && selectedImage!!.architecture != it.architecture) selectedImage = null })
                     if (typesForLocation.isEmpty()) InlineError(stringResource(R.string.provision_no_types_for_filters))
                     PriceSummary(pricingState)
@@ -267,7 +287,7 @@ internal fun ServerProvisioningScreen(
             title = { Text(stringResource(R.string.provision_create_confirm_title, name)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(stringResource(R.string.provision_create_confirm_message, typeDescription(selectedType!!), selectedImage!!.name.orEmpty(), selectedLocation!!.name.orEmpty()))
+                    Text(stringResource(R.string.provision_create_confirm_message, typeDescription(selectedType!!), selectedImage!!.name.orEmpty(), selectedLocation!!.displayName()))
                     PriceSummary(pricingState)
                     error?.let {
                         InlineError(it)

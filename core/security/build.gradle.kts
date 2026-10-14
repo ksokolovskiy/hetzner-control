@@ -5,7 +5,7 @@ plugins {
 
 android {
     namespace = "com.hcloudcontrol.core.security"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig { minSdk = 26 }
     compileOptions {

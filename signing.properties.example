@@ -1,0 +1,7 @@
+# Copy this file to the ignored signing.properties file only on the machine or
+# CI secret store that produces the Play upload bundle. Never commit that copy.
+# The upload key must live outside this repository.
+storeFile=/absolute/path/outside/this/repository/hcloud-control-upload.jks
+storePassword=replace-with-keystore-password
+keyAlias=hcloud-control-upload
+keyPassword=replace-with-key-password

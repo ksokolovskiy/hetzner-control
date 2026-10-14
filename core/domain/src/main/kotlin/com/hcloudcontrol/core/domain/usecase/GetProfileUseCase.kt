@@ -1,8 +1,5 @@
 package com.hcloudcontrol.core.domain.usecase
 
-import com.hcloudcontrol.core.domain.model.Profile
-import com.hcloudcontrol.core.domain.repository.HCloudRepository
-
-class GetProfileUseCase(private val repository: HCloudRepository) {
-    suspend operator fun invoke(): Profile = repository.getProfile()
-}
+// Intentionally retained as a source placeholder for binary/source layout continuity.
+// The public Hetzner Cloud API has no GET /v1/profile endpoint, so account-profile
+// retrieval must not be added here. Project connection metadata is local and non-secret.

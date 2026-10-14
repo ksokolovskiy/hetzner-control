@@ -1,0 +1,10 @@
+<resources>
+    <string name="storage_boxes_project_token">Managed with this project’s Hetzner API token. No separate Storage Box credential is required.</string>
+    <string name="storage_boxes_load_error_project">Could not load Storage Boxes. Check this project’s API token and try again.</string>
+    <string name="storage_boxes_legacy_credentials_title">Saved legacy credentials</string>
+    <string name="storage_boxes_legacy_credentials_message">Earlier app versions stored separate Storage Box credentials. They are no longer used or sent. They remain encrypted on this device until you explicitly remove them.</string>
+    <string name="storage_boxes_legacy_credentials_remove">Remove</string>
+    <string name="storage_boxes_legacy_credentials_forget_title">Remove saved credential?</string>
+    <string name="storage_boxes_legacy_credentials_forget_message">This permanently deletes the unused encrypted credential from this device. It cannot be recovered.</string>
+    <string name="storage_boxes_legacy_credentials_forget_confirm">Remove credential</string>
+</resources>

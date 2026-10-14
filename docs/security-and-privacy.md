@@ -31,13 +31,14 @@ Use a distinct Hetzner Cloud API token for each project and revoke it in
 Hetzner Cloud when a device is lost, a project is removed, or access is no
 longer required.
 
-## Storage Box API tokens
+## Storage Box API authentication
 
-- Storage Box connections use a separate encrypted preference file and a
-  separate Android Keystore-backed credential boundary.
-- A Storage Box token is never read from, copied into, or sent by the Cloud
-  project connection flow. Likewise, a Cloud token is never reused for Storage
-  Box requests.
+- Storage Box lifecycle requests use the selected Hetzner Console project's
+  API token with the documented `api.hetzner.com/v1` host. The token remains in
+  the encrypted project store and is never exposed to UI state.
+- Earlier app versions asked for a separate Storage Box credential. The app no
+  longer reads, copies, or sends it. It remains encrypted locally only until
+  the user explicitly removes it from the migration notice.
 - The Storage Box client talks to the documented Storage Box API host, not to
   the Cloud API host. It currently exposes inventory, folders, snapshots and
   subaccount identity. Creating a manual snapshot is an enabled mutation;
@@ -45,7 +46,7 @@ longer required.
 - Storage Box subaccount passwords and other access secrets are neither
   requested nor shown. Names and usernames returned by the API are ordinary
   resource metadata and may be displayed locally while that screen is open.
-- Do not put either kind of token in local environment files, sample
+- Do not put project or test-profile tokens in local environment files, sample
   configuration, source, issue reports, screenshots, or documentation.
 
 ## External test-mock profiles

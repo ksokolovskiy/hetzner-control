@@ -1,8 +1,8 @@
 # Google Play release-readiness audit
 
-Snapshot: 2026-10-14. This document describes local build evidence only. It
-does not authorize creating a signing key, signing an artifact, creating a
-Play Console listing, or uploading a build.
+Snapshot: 2026-10-14. This document describes the reproducible preparation
+for a closed Google Play test. It does not authorize an upload or create a
+signing key on the maintainer's behalf.
 
 ## Evidence collected
 
@@ -11,23 +11,22 @@ completed the following without installing anything on a device:
 
 ```sh
 sh tools/provision-aapt2-runner.sh
-./build.sh :app:bundleRelease :app:testReleaseUnitTest :app:lintRelease --no-daemon --console=plain
+./build.sh :app:bundleRelease --rerun-tasks --no-daemon --console=plain
 ```
 
-The resulting unsigned bundle is:
+The resulting (intentionally unsigned) verification bundle is:
 
 ```
 app/build/outputs/bundle/release/app-release.aab
 ```
 
-The release unit-test task and `lintRelease` completed successfully. The
-release bundle is deliberately **unsigned**: Gradle's `signingReport` reports
-`Config: null` for the `release` variant. This is appropriate for source-tree
+API 36 and AGP 8.12.2 were verified with a clean local release bundle. The
+bundle is deliberately **unsigned** until an upload key is supplied from an
+ignored local file. An unsigned bundle is appropriate for source-tree
 verification, but is not uploadable to Google Play.
 
-The same command also produces the debug APK because `build.sh` always adds
-`assembleDebug`; this is harmless but should be kept in mind when estimating
-CI time.
+`build.sh` builds `assembleDebug` only when no task is specified; an explicit
+release request no longer compiles an unnecessary debug APK.
 
 ## Current build configuration
 
@@ -35,24 +34,23 @@ CI time.
 | --- | --- | --- |
 | Application id | `com.hcloudcontrol` | Must be reserved in Play Console before first production upload. |
 | Version code/name | `1` / `0.1.0` | Increase `versionCode` for every later Play upload. |
-| min / target / compile SDK | 26 / 35 / 35 | Does not meet the current new-app Play target requirement. |
-| Release signing | Not configured | A signing key and an injected signing configuration are required. |
+| min / target / compile SDK | 26 / 36 / 36 | Meets the current new-app target requirement. |
+| Release signing | External `signing.properties` supported | An upload key is still required locally or in CI secrets. |
 | Minification / resource shrinking | Not configured | The default release behavior is no minification or shrinking; no R8/ProGuard compatibility claim has been made. |
 
 ## Blocking requirements before the first Play submission
 
 1. **API level:** Google Play requires new apps and updates submitted from
-   31 August 2026 to target Android 16 / API 36 or higher. The project
-   currently targets 35. Follow the isolated migration plan in
-   [target-api-36-readiness.md](target-api-36-readiness.md), then rerun the
-   complete release verification on API 36. Official requirement:
+   31 August 2026 to target Android 16 / API 36 or higher. The project now
+   targets 36. Official requirement:
    <https://developer.android.com/google/play/requirements/target-sdk>.
 2. **Signing:** Create and retain the upload key outside the repository; do
-   not commit a keystore, passwords, or Play service-account JSON. Add a
-   release signing configuration which accepts those values only from local or
-   CI secrets, then verify the signed AAB's certificate fingerprint before
-   upload. Play App Signing enrollment is a separate Play Console decision.
-3. **Store compliance:** Complete the Play listing, privacy-policy URL, Data
+   not commit a keystore, passwords, or Play service-account JSON. Copy
+   `signing.properties.example` to the ignored `signing.properties`, fill it
+   with the local upload-key values, and use `tools/build-play-bundle.sh`.
+   The script refuses to make an unsigned upload bundle. Play App Signing
+   enrollment is a separate Play Console decision.
+3. **Store compliance:** Complete the Play listing, a public privacy-policy URL, Data
    safety form, content rating, app-access declaration (if applicable),
    country distribution, and the required closed-test track before production.
    These must describe the final binary, especially encrypted per-project API
@@ -70,13 +68,11 @@ CI time.
 
 ## Safe pre-upload verification sequence
 
-After the target-SDK and signing work has been reviewed, run this on the exact
-commit intended for upload:
+After the signing work has been reviewed, run this on the exact commit
+intended for upload:
 
 ```sh
-sh tools/provision-aapt2-runner.sh
-./build.sh :app:bundleRelease :app:testReleaseUnitTest :app:lintRelease --no-daemon --console=plain
-./build.sh :app:signingReport --no-daemon --console=plain
+sh tools/build-play-bundle.sh
 ```
 
 Then confirm the release signing report names the expected non-debug upload

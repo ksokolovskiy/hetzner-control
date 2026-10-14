@@ -1,5 +1,6 @@
 package com.hcloudcontrol
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -90,6 +91,10 @@ fun LoadBalancersScreen(
     var state by remember(projectId) { mutableStateOf<LoadBalancerListState>(LoadBalancerListState.Loading) }
     var selected by remember(projectId) { mutableStateOf<LoadBalancerInventory?>(null) }
     var showTypes by remember(projectId) { mutableStateOf(false) }
+    BackHandler(enabled = selected != null || showTypes) {
+        selected = null
+        showTypes = false
+    }
 
     LaunchedEffect(projectId, refreshKey) {
         state = LoadBalancerListState.Loading
@@ -131,7 +136,13 @@ fun LoadBalancersScreen(
             if (current.loadBalancers.isEmpty()) {
                 LoadBalancerEmptyState(onRetry = { refreshKey++ }, onBrowseTypes = { showTypes = true })
             } else {
+                HCloudPullToRefresh(
+                    isRefreshing = false,
+                    onRefresh = { refreshKey++ },
+                    modifier = Modifier.fillMaxSize(),
+                ) {
                 LazyColumn(
+                    state = rememberRestorableLazyListState("load-balancers"),
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -146,6 +157,7 @@ fun LoadBalancersScreen(
                     items(current.loadBalancers.sortedWith(compareBy<LoadBalancerInventory> { it.name.lowercase() }.thenBy { it.id }), key = { it.id }) { loadBalancer ->
                         LoadBalancerCard(loadBalancer) { selected = loadBalancer }
                     }
+                }
                 }
             }
         }

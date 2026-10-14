@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   build-and-test:
-    name: Build debug APK and test network core
+    name: Verify API 36 build and tests
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
@@ -27,12 +27,18 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Install Android API 36 platform
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
       # The repository does not yet contain a Gradle Wrapper. Pin the CI
-      # distribution explicitly; AGP 8.7.3 requires Gradle 8.9.
-      - name: Set up Gradle 8.9
+      # distribution explicitly; AGP 8.12.2 requires Gradle 8.13.
+      - name: Set up Gradle 8.13
         uses: gradle/actions/setup-gradle@v6
         with:
-          gradle-version: '8.9'
+          gradle-version: '8.13'
           cache-provider: basic
           add-job-summary: 'on-failure'
 
@@ -44,6 +50,9 @@ jobs:
 
       - name: Assemble debug APK
         run: gradle --no-daemon :app:assembleDebug
+
+      - name: Verify unsigned release bundle, tests, and lint
+        run: gradle --no-daemon :app:bundleRelease :app:testReleaseUnitTest :app:lintRelease
 
       - name: Upload debug APK
         if: success()

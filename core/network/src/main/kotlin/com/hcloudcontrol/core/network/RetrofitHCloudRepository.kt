@@ -1,6 +1,5 @@
 package com.hcloudcontrol.core.network
 
-import com.hcloudcontrol.core.domain.model.Profile
 import com.hcloudcontrol.core.domain.model.CloudAction
 import com.hcloudcontrol.core.domain.model.CreateServerSpec
 import com.hcloudcontrol.core.domain.model.CreatedServer
@@ -76,10 +75,6 @@ import com.hcloudcontrol.core.domain.model.RebuiltServerResult
 import com.hcloudcontrol.core.domain.model.ServerRebuildSpec
 
 internal class RetrofitHCloudRepository(private val api: HCloudApi) : HCloudRepository {
-    override suspend fun getProfile(): Profile = api.getProfile().profile.let {
-        Profile(id = it.id, name = it.name, email = it.email)
-    }
-
     override suspend fun getServers(): List<Server> = allServerPages().map { it.toDomain() }
 
     override suspend fun getServer(serverId: Long): Server = api.getServer(serverId).server.toDomain()

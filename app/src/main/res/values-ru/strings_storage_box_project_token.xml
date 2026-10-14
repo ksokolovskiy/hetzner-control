@@ -1,0 +1,10 @@
+<resources>
+    <string name="storage_boxes_project_token">Управляется API-токеном этого Cloud project. Отдельный токен Storage Box не нужен.</string>
+    <string name="storage_boxes_load_error_project">Не удалось загрузить Storage Boxes. Проверьте API-токен текущего проекта и повторите попытку.</string>
+    <string name="storage_boxes_legacy_credentials_title">Сохранённые прежние учётные данные</string>
+    <string name="storage_boxes_legacy_credentials_message">Предыдущие версии приложения сохраняли отдельные данные Storage Box. Они больше не используются и не передаются. Они остаются зашифрованными на устройстве, пока вы явно не удалите их.</string>
+    <string name="storage_boxes_legacy_credentials_remove">Удалить</string>
+    <string name="storage_boxes_legacy_credentials_forget_title">Удалить сохранённые данные?</string>
+    <string name="storage_boxes_legacy_credentials_forget_message">Это навсегда удалит неиспользуемые зашифрованные данные с устройства. Восстановить их нельзя.</string>
+    <string name="storage_boxes_legacy_credentials_forget_confirm">Удалить данные</string>
+</resources>

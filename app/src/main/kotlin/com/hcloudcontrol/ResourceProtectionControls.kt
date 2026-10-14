@@ -51,6 +51,12 @@ internal fun ResourceProtectionControls(
         OutlinedButton(onClick = { reviewRequested = true }, modifier = Modifier.fillMaxWidth()) {
             Text(stringResource(if (desiredProtected) R.string.resource_protection_enable else R.string.resource_protection_disable))
         }
+    } else {
+        Text(
+            stringResource(R.string.resource_protection_locked),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
     if (reviewRequested) {
         ResourceProtectionReviewDialog(

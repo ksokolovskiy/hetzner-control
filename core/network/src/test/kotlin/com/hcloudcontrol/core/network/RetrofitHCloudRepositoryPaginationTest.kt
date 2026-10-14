@@ -682,7 +682,6 @@ private class PagingApi : HCloudApi {
     var createServerFailure: Throwable? = null
     var pricingRequests = 0
 
-    override suspend fun getProfile() = ProfileResponse(ProfileDto(1, "Owner", "owner@example.test"))
 
     override suspend fun getServers(page: Int, perPage: Int): ServersResponse {
         serverPages += page

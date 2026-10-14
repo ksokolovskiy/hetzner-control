@@ -1,24 +1,27 @@
 # HCloud Control
 
-An Android client for Hetzner Cloud, with separately authenticated Storage Box
+An Android client for Hetzner Cloud, with project-token authenticated Storage Box
 inventory and snapshot creation. Cloud DNS is available as an explicitly
 acknowledged, read-only view through the Hetzner Cloud API. The app does not
 use or manage Hetzner Robot or the legacy DNS Console API.
+
+This project is released under the [MIT License](LICENSE). Its published
+[privacy policy](https://ksokolovskiy.github.io/hetzner-control/privacy-policy/)
+is maintained alongside the source.
 
 ## Modules
 
 - `app` — Compose application and dependency wiring.
 - `core:domain` — models, repository contracts, and use cases.
-- `core:network` — Retrofit clients for the Cloud API and the separately
-  authenticated Storage Box API.
-- `core:security` — separately encrypted Cloud and Storage Box credential
-  persistence abstractions.
+- `core:network` — Retrofit clients for the Cloud API and the Storage Box API.
+- `core:security` — encrypted Cloud project credential persistence and a
+  legacy-credential removal boundary.
 
-Cloud, Storage Box, and test-mock credentials are never written to logs or
-exposed in a resource UI state. Each credential is stored separately using
-Jetpack Security's `EncryptedSharedPreferences`, whose master key is backed by
-Android Keystore. See [security and privacy notes](docs/security-and-privacy.md)
-for important scope and test-profile boundaries.
+Cloud project and test-mock credentials are never written to logs or exposed in
+a resource UI state. Project credentials are stored using Jetpack Security's
+`EncryptedSharedPreferences`, whose master key is backed by Android Keystore.
+See [security and privacy notes](docs/security-and-privacy.md) for important
+scope and test-profile boundaries.
 
 ## API contract
 
@@ -83,3 +86,21 @@ sh tools/test-repository-hygiene.sh
 
 These are source-level guardrails. Run a maintained secret scanner against the
 entire reachable Git history in CI before changing repository visibility.
+
+## Google Play closed testing
+
+The project targets Android API 36 and has a reproducible signed-bundle
+entrypoint. Signing credentials are deliberately absent from source control:
+copy `signing.properties.example` to the ignored `signing.properties`, store
+the upload key outside the repository, then run:
+
+```sh
+sh tools/build-play-bundle.sh
+```
+
+The resulting signed AAB is the only artifact intended for Google Play. The
+closed-test runbook, listing draft, and privacy-policy draft are in
+[docs/play-console-closed-test.md](docs/play-console-closed-test.md) and
+[docs/privacy-policy-draft.md](docs/privacy-policy-draft.md). The policy still
+must be reviewed and published at a public HTTPS URL by the owner before a
+Play submission.

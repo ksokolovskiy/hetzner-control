@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Privacy policy for HCloud Control, an independent Android client for Hetzner Cloud.">
+    <title>Privacy Policy · HCloud Control</title>
+    <style>
+      :root { color-scheme: light dark; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+      body { margin: 0; background: #f8fafc; color: #172033; line-height: 1.6; }
+      main { box-sizing: border-box; max-width: 780px; margin: 0 auto; padding: 48px 24px 72px; }
+      h1 { line-height: 1.15; margin-bottom: .25rem; }
+      h2 { margin-top: 2rem; line-height: 1.25; }
+      .meta { color: #53657d; }
+      a { color: #075fba; }
+      .notice { margin-top: 2rem; padding: 1rem 1.25rem; border-left: 4px solid #ef7d00; background: #fff4e5; }
+      @media (prefers-color-scheme: dark) {
+        body { background: #111827; color: #e5edf8; }
+        .meta { color: #b2c1d5; }
+        a { color: #80bfff; }
+        .notice { background: #362915; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>HCloud Control Privacy Policy</h1>
+      <p class="meta">Effective date: 14 October 2026</p>
+
+      <p>HCloud Control is an independent Android application for managing Hetzner Cloud resources. It is not affiliated with Hetzner.</p>
+
+      <h2>Data the app handles</h2>
+      <p>The app asks you to enter a separate Hetzner Cloud API token for each Cloud project you choose to connect. If you use Object Storage, it also asks for an S3 access key and secret key. It processes resource metadata returned by connected services, including server names, IP addresses, locations, storage names, network configuration, DNS data and SSH-key metadata. A one-time root password may be displayed after server creation if Hetzner returns one.</p>
+
+      <h2>How data is used and stored</h2>
+      <p>Cloud tokens and Object Storage credentials are used only to authenticate requests to the Hetzner service you selected. They are stored encrypted on your device using Android Keystore-backed encryption. Resource metadata is held in memory to display the active screen.</p>
+      <p>The app does not operate an application backend, synchronize credentials, sell data, use advertising, or include analytics or crash-reporting SDKs. It does not intentionally write API tokens, Object Storage secrets or one-time root passwords to its diagnostics. A root password is displayed only in the immediate successful creation flow and is not stored by the app.</p>
+
+      <h2>Sharing</h2>
+      <p>The app sends requests directly from your device to the Hetzner endpoints required by the features you use. It does not otherwise share your information with third parties.</p>
+
+      <h2>Your choices</h2>
+      <p>You can remove a configured Cloud project in the app. Removing it removes the corresponding locally stored token and connection metadata. You can revoke a token through Hetzner Cloud at any time. Android system backups are disabled for this app.</p>
+
+      <h2>Security</h2>
+      <p>No storage or transmission method is completely secure. Keep your device secure, use distinct limited-scope credentials where available, and revoke a credential if you believe your device has been compromised.</p>
+
+      <h2>Changes</h2>
+      <p>This policy may be updated when the app changes. The effective date above will be updated with a new published version.</p>
+
+      <h2>Contact</h2>
+      <p>For privacy questions or requests, use the project’s <a href="https://github.com/ksokolovskiy/hetzner-control/issues">GitHub issue tracker</a>. Do not include API tokens, passwords, access keys, secret keys or other credentials in an issue.</p>
+
+      <p class="notice">The Android app and this policy are maintained as an open-source project. The source and release notes are available in the linked repository.</p>
+    </main>
+  </body>
+</html>

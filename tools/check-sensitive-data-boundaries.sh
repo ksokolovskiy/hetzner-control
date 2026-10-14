@@ -5,6 +5,9 @@ set -eu
 PROJECT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 SECURITY_STORE="$PROJECT_DIR/core/security/src/main/kotlin/com/hcloudcontrol/core/security/EncryptedHCloudTokenStore.kt"
 STORAGE_BOX_STORE="$PROJECT_DIR/core/security/src/main/kotlin/com/hcloudcontrol/core/security/StorageBoxTokenStore.kt"
+OBJECT_STORAGE_STORE="$PROJECT_DIR/core/security/src/main/kotlin/com/hcloudcontrol/core/security/ObjectStorageCredentialStore.kt"
+OBJECT_STORAGE_UI="$PROJECT_DIR/app/src/main/kotlin/com/hcloudcontrol/ObjectStorageScreen.kt"
+OBJECT_STORAGE_CLIENT="$PROJECT_DIR/core/network/src/main/kotlin/com/hcloudcontrol/core/network/ObjectStorageS3Repository.kt"
 APP_ENTRY="$PROJECT_DIR/app/src/main/kotlin/com/hcloudcontrol/MainActivity.kt"
 PROVISIONING_UI="$PROJECT_DIR/app/src/main/kotlin/com/hcloudcontrol/ServerProvisioningScreen.kt"
 API_ERROR_MAPPER="$PROJECT_DIR/core/network/src/main/kotlin/com/hcloudcontrol/core/network/HCloudApiErrorMapper.kt"
@@ -22,7 +25,7 @@ require_literal() {
     rg -F -q "$literal" "$file" || fail "missing required contract in ${file#$PROJECT_DIR/}: $literal"
 }
 
-for file in "$SECURITY_STORE" "$STORAGE_BOX_STORE" "$APP_ENTRY" "$PROVISIONING_UI" "$API_ERROR_MAPPER" "$API_FAILURE" "$API_DIAGNOSTICS"; do
+for file in "$SECURITY_STORE" "$STORAGE_BOX_STORE" "$OBJECT_STORAGE_STORE" "$OBJECT_STORAGE_UI" "$OBJECT_STORAGE_CLIENT" "$APP_ENTRY" "$PROVISIONING_UI" "$API_ERROR_MAPPER" "$API_FAILURE" "$API_DIAGNOSTICS"; do
     [ -f "$file" ] || fail "required source file is missing: ${file#$PROJECT_DIR/}"
 done
 
@@ -35,26 +38,36 @@ require_literal "$SECURITY_STORE" "fun tokenKey(connectionId: String)"
 require_literal "$SECURITY_STORE" ".putString(tokenKey(connection.id), token.trim())"
 require_literal "$SECURITY_STORE" ".remove(tokenKey(connectionId))"
 
-# Storage Box has a different API host and must retain an equally encrypted,
-# independently scoped token store. Do not allow it to collapse into the Cloud
-# credential namespace merely because both APIs use bearer authentication.
-require_literal "$STORAGE_BOX_STORE" "class EncryptedStorageBoxTokenStore"
+# Storage Box is a Cloud-project resource. A historical second credential remains
+# encrypted only for explicit removal and must never be returned or reused.
+require_literal "$STORAGE_BOX_STORE" "class EncryptedLegacyStorageBoxCredentialStore"
 require_literal "$STORAGE_BOX_STORE" "EncryptedSharedPreferences.create"
 require_literal "$STORAGE_BOX_STORE" "MasterKey.Builder(context).setKeyScheme(MasterKey.KeyScheme.AES256_GCM)"
 require_literal "$STORAGE_BOX_STORE" 'const val FILE_NAME = "storage_box_secure_credentials"'
-if rg -n -e 'hcloud_secure_credentials' -e 'HCloudTokenStore.*StorageBox' -e 'storage_box_api_token_.*api_token_' "$STORAGE_BOX_STORE"; then
-    fail "Storage Box credentials appear to share the Cloud credential namespace"
+require_literal "$STORAGE_BOX_STORE" ".remove(tokenKey(credentialId))"
+if rg -n -e 'fun token\(' -e 'getString\(tokenKey' "$STORAGE_BOX_STORE"; then
+    fail "legacy Storage Box credential secret appears readable or reusable"
 fi
 
 # The token provider may enter the network repository, but must not be read into
 # Compose UI state or a Text composable.
 require_literal "$APP_ENTRY" "HCloudRepositoryFactory.create(tokenStore::token)"
-require_literal "$APP_ENTRY" "StorageBoxRepositoryFactory.create(storageBoxTokenStore::token)"
+require_literal "$APP_ENTRY" "StorageBoxRepositoryFactory.create(tokenStore::token)"
 if rg -n -e 'tokenStore\.token\(\)' -e 'mutableStateOf\(tokenStore\.token' -e 'Text\([^)]*tokenStore\.token' "$APP_ENTRY"; then
     fail "active API token appears to cross into UI state or rendering"
 fi
-if rg -n -e 'storageBoxTokenStore\.token\(\)' -e 'mutableStateOf\(storageBoxTokenStore\.token' -e 'Text\([^)]*storageBoxTokenStore\.token' "$APP_ENTRY"; then
-    fail "active Storage Box API token appears to cross into UI state or rendering"
+# Object Storage is a third credential boundary: both keys are encrypted at
+# rest, never rendered, and only supplied to the SigV4 client in memory.
+require_literal "$OBJECT_STORAGE_STORE" "class EncryptedObjectStorageCredentialStore"
+require_literal "$OBJECT_STORAGE_STORE" "EncryptedSharedPreferences.create"
+require_literal "$OBJECT_STORAGE_STORE" 'const val FILE_NAME = "object_storage_secure_credentials"'
+require_literal "$OBJECT_STORAGE_STORE" ".putString(accessKey(connection.id), accessKey.trim())"
+require_literal "$OBJECT_STORAGE_STORE" ".putString(secretKey(connection.id), secretKey.trim())"
+require_literal "$OBJECT_STORAGE_STORE" ".remove(accessKey(connectionId)).remove(secretKey(connectionId))"
+require_literal "$OBJECT_STORAGE_CLIENT" "AWS4-HMAC-SHA256 Credential="
+require_literal "$OBJECT_STORAGE_CLIENT" "credentials.location.host"
+if rg -n -e 'Text\([^)]*(accessKey|secretKey|credentials\.)' -e 'println\(' -e 'Log\.' "$OBJECT_STORAGE_UI" "$OBJECT_STORAGE_CLIENT" "$OBJECT_STORAGE_STORE"; then
+    fail "Object Storage credential material may reach UI or logs"
 fi
 
 # Root passwords must never be introduced into encrypted token storage. The UI

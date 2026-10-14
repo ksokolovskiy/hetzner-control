@@ -1,5 +1,6 @@
 package com.hcloudcontrol
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -63,6 +64,7 @@ fun CertificatesScreen(repository: HCloudRepository, projectId: String) {
     var refreshKey by remember(projectId) { mutableIntStateOf(0) }
     var state by remember(projectId) { mutableStateOf<CertificatesListState>(CertificatesListState.Loading) }
     var selected by remember(projectId) { mutableStateOf<CertificateInventory?>(null) }
+    BackHandler(enabled = selected != null) { selected = null }
 
     LaunchedEffect(projectId, refreshKey) {
         state = CertificatesListState.Loading
@@ -91,7 +93,13 @@ fun CertificatesScreen(repository: HCloudRepository, projectId: String) {
                 stringResource(R.string.certificates_empty_message),
                 stringResource(R.string.certificates_retry),
             ) { refreshKey++ }
-        } else LazyColumn(
+        } else HCloudPullToRefresh(
+            isRefreshing = false,
+            onRefresh = { refreshKey++ },
+            modifier = Modifier.fillMaxSize(),
+        ) {
+        LazyColumn(
+            state = rememberRestorableLazyListState("certificates"),
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -103,6 +111,7 @@ fun CertificatesScreen(repository: HCloudRepository, projectId: String) {
             items(current.certificates.sortedWith(compareBy<CertificateInventory> { it.name.lowercase() }.thenBy { it.id }), key = { it.id }) { certificate ->
                 CertificateCard(certificate) { selected = certificate }
             }
+        }
         }
     }
 }

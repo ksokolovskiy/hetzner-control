@@ -10,6 +10,9 @@
     <string name="onboarding_test_token_label">API-токен тестового сервера</string>
     <string name="onboarding_test_token_error">Введите токен тестового сервера</string>
     <string name="onboarding_open_test_server">Открыть тестовый сервер</string>
+    <string name="onboarding_save_error">Не удалось сохранить подключение на устройстве. Попробуйте ещё раз.</string>
+    <string name="onboarding_test_server_connected">Профиль тестового сервера сохранён и открыт</string>
+    <string name="onboarding_project_connected">Cloud project сохранён и открыт</string>
     <string name="test_server_badge">ТЕСТОВЫЙ СЕРВЕР · ВРЕМЕННО</string>
     <string name="storage_boxes_title">Storage Boxes</string><string name="storage_boxes_add_connection">Добавить подключение</string><string name="storage_boxes_separate_credentials">Storage Box использует отдельный API-токен. Токен Hetzner Cloud никогда не переиспользуется.</string><string name="storage_boxes_loading">Загружаем Storage Boxes…</string><string name="storage_boxes_load_error">Не удалось загрузить Storage Boxes. Проверьте отдельный токен Storage Box и повторите попытку.</string><string name="storage_boxes_error_title">Не удалось загрузить Storage Boxes</string><string name="storage_boxes_retry">Повторить</string><string name="storage_boxes_empty_title">Storage Boxes нет</string><string name="storage_boxes_empty_message">В этом подключении нет Storage Boxes.</string><string name="storage_boxes_pagination_note">Загружены все доступные страницы этого подключения.</string><string name="storage_boxes_connect_title">Подключить Storage Box</string><string name="storage_boxes_connect_explanation">Используйте отдельный API-токен Storage Box. Он хранится отдельно и зашифрованно на устройстве; это не токен Hetzner Cloud.</string><string name="storage_boxes_connection_name">Название подключения</string><string name="storage_boxes_name_error">Введите название подключения</string><string name="storage_boxes_token">API-токен Storage Box</string><string name="storage_boxes_token_error">Введите API-токен Storage Box</string><string name="storage_boxes_connect">Подключить Storage Box</string><string name="storage_boxes_unnamed">Storage Box без имени</string><string name="storage_boxes_status_unknown">Статус недоступен</string><string name="storage_boxes_usage">Данные: %1$d из %2$d байт API</string><string name="storage_boxes_back">Назад</string><string name="storage_boxes_status">Статус</string><string name="storage_boxes_stats">Статистика хранилища</string><string name="storage_boxes_total">Всего: %1$d байт API</string><string name="storage_boxes_data">Данные: %1$d байт API</string><string name="storage_boxes_snapshots">Snapshots: %1$d байт API</string><string name="storage_boxes_stats_unavailable">Статистика хранилища отсутствует в ответе.</string><string name="storage_boxes_folders_unavailable">Просмотр папок недоступен для этого подключения Storage Box.</string>
     <string name="tariffs_title">Тарифы и оценка</string><string name="tariffs_disclaimer">Это официальный каталог цен Hetzner Cloud, а не счёт, текущее потребление, сумма к оплате или гарантированный прогноз. Он не учитывает скидки, кредиты, налоги за пределами значений API и другие расходы по потреблению.</string><string name="tariffs_usage_link">Потребление и alerts в Console</string><string name="tariffs_invoices_link">Счета в Accounts</string><string name="tariffs_error_title">Не удалось загрузить тарифы</string><string name="tariffs_error_message">Проверьте Cloud-подключение и повторите попытку.</string><string name="tariffs_retry">Повторить</string><string name="tariffs_loading">Загружаем официальный каталог цен…</string><string name="tariffs_incomplete_title">Каталог цен неполный</string><string name="tariffs_incomplete_message">Для некоторых пар типа сервера и локации нет цены, поэтому оценка не показана.</string><string name="tariffs_currency_vat">Валюта: %1$s · VAT из API: %2$s</string><string name="tariffs_rate">%1$s · %2$s %3$s/час · %4$s %5$s/месяц максимум</string>
@@ -441,7 +444,7 @@
     <string name="resize_server_must_be_off">Перед сменой типа сервер должен быть выключен. Сейчас он не выключен, поэтому продолжить нельзя.</string>
     <string name="resize_target_type">Новый тип</string>
     <string name="resize_choose_type">Выберите тип</string>
-    <string name="resize_type_summary">%1$s · %2$d vCPU · %3$s ГБ RAM · %4$d ГБ диск</string>
+    <string name="resize_type_summary">%1$s · %2$d vCPU · %3$.1f ГБ RAM · %4$d ГБ диск</string>
     <string name="resize_price_location">Цена API для %1$s в %2$s</string>
     <string name="resize_upgrade_disk_label">Увеличить диск до размера нового типа</string>
     <string name="resize_disk_upgrade_acknowledgement">Я понимаю, что увеличение диска необратимо: впоследствии уменьшить его нельзя.</string>
@@ -471,6 +474,9 @@
     <string name="settings_profile_id">ID аккаунта: %1$d</string>
     <string name="settings_profile_email">Эл. почта: %1$s</string>
     <string name="settings_profile_read_only_note">Сведения об аккаунте только для просмотра для этого Cloud project. API-токены никогда не показываются.</string>
+    <string name="settings_profile_project_connection">Подключённый Cloud project</string>
+    <string name="settings_profile_test_connection">Подключённая тестовая среда</string>
+    <string name="settings_profile_api_scope_note">Токены Hetzner Cloud привязаны к проекту. Публичный Cloud API не возвращает имя или email аккаунта; API-токены никогда не показываются.</string>
     <string name="volume_detail_title">Сведения о volume</string>
     <string name="volume_detail_loading">Загружаем сведения о volume…</string>
     <string name="volume_detail_load_error">Не удалось загрузить сведения о volume. Проверьте подключение и повторите попытку.</string>
@@ -591,9 +597,16 @@
     <string name="load_balancer_types_price">%1$s · в час %2$s · максимум в месяц %3$s</string>
     <string name="load_balancer_types_read_only">Каталог только для просмотра. Здесь нельзя создать, изменить размер или поменять Load Balancer.</string>
     <string name="network_actions_title">История действий сети</string><string name="network_actions_empty">Hetzner Cloud не вернул действий для этой сети.</string><string name="network_actions_unknown">Неизвестное действие</string>
-    <string name="nav_catalog">Каталог</string>
-    <string name="server_catalog_title">Каталог серверов</string>
-    <string name="server_catalog_description">Метаданные типов серверов и локаций только для чтения. Цены показаны в точности так, как их вернул API Hetzner Cloud.</string>
+    <string name="nav_catalog">Создать</string>
+    <string name="server_catalog_title">Создать сервер</string>
+    <string name="server_catalog_description">Начните проверенное оформление сервера или сначала сравните типы и локации.</string>
+    <string name="server_catalog_configure_server">Настроить и создать сервер</string>
+    <string name="server_catalog_changes_disabled">Изменения на этом устройстве выключены. Можно сравнить цены и доступность, а затем включить «Изменения» в настройках, когда будете готовы создавать ресурсы.</string>
+    <string name="server_catalog_open_settings">Открыть настройки</string>
+    <string name="server_catalog_other_resources">Другие ресурсы</string>
+    <string name="server_catalog_other_resources_description">Для томов, приватных сетей, firewall и публичных IP есть отдельные проверенные сценарии.</string>
+    <string name="server_catalog_open_storage">Открыть хранилище</string>
+    <string name="server_catalog_open_network">Открыть сеть</string>
     <string name="server_catalog_loading">Загружаем каталог…</string>
     <string name="server_catalog_load_failed">Не удалось загрузить каталог серверов.</string>
     <string name="server_catalog_types">Типы серверов</string>
@@ -809,5 +822,38 @@
     <string name="resource_protection_confirmation_label">Подтверждение</string>
     <string name="resource_protection_confirm">Применить изменение защиты</string>
     <string name="resource_protection_failed">Hetzner Cloud не смог обновить защиту от удаления. Ресурс не изменён.</string>
+    <string name="resource_protection_locked">Чтобы изменить защиту от удаления, включите операции повышенного риска в настройках на этом устройстве. Ресурс не изменён.</string>
     <string name="nav_more">Ещё</string>
+    <string name="nav_object_storage">Object Storage</string>
+    <string name="object_storage_title">Object Storage</string>
+    <string name="object_storage_subtitle">S3-бакеты используют отдельные ключи проекта.</string>
+    <string name="object_storage_loading">Загрузка бакетов…</string>
+    <string name="object_storage_empty">В этом S3-подключении нет бакетов.</string>
+    <string name="object_storage_created_unknown">Дата создания недоступна</string>
+    <string name="object_storage_connection">S3-подключение</string>
+    <string name="object_storage_add_connection">Добавить S3-подключение</string>
+    <string name="object_storage_remove_connection">Удалить</string>
+    <string name="object_storage_connect_title">Подключить Object Storage</string>
+    <string name="object_storage_setup_explanation">Сначала создайте S3 credentials в Hetzner Console → проект → Security → S3 Credentials. Секрет показывается только один раз; API для его создания или восстановления нет.</string>
+    <string name="object_storage_security_note">По возможности используйте отдельный проект и ограничивающую bucket policy. Приложение хранит access и secret keys зашифрованно на устройстве и не показывает их после сохранения.</string>
+    <string name="object_storage_profile_name">Локальное имя профиля</string>
+    <string name="object_storage_location">Локация endpoint</string>
+    <string name="object_storage_access_key">S3 access key</string>
+    <string name="object_storage_secret_key">S3 secret key</string>
+    <string name="object_storage_connect_action">Проверить и подключить</string>
+    <string name="object_storage_mutations_disabled">Кнопки создания и удаления скрыты, пока в настройках не включены операции повышенного риска.</string>
+    <string name="object_storage_create_action">Создать бакет</string>
+    <string name="object_storage_delete_action">Удалить</string>
+    <string name="object_storage_create_title">Создать бакет</string>
+    <string name="object_storage_create_warning">Будет создан приватный S3-бакет в выбранной локации. Имена бакетов глобально уникальны и не переименовываются.</string>
+    <string name="object_storage_create_cost_warning">Создание первого активного бакета может начать списания за Object Storage. Этот API не предоставляет оценку стоимости.</string>
+    <string name="object_storage_bucket_name">Имя бакета</string>
+    <string name="object_storage_create_confirm">Создать бакет</string>
+    <string name="object_storage_delete_title">Удалить %1$s?</string>
+    <string name="object_storage_delete_warning">Бакет будет удалён навсегда, только если он пуст. Перед запросом удаления приложение заново проверяет пустоту.</string>
+    <string name="object_storage_delete_protection_warning">Если в Console включена защита от удаления, сначала отключите её в Hetzner Console. S3 API не даёт надёжного переключателя этой защиты.</string>
+    <string name="object_storage_delete_type_name">Для продолжения введите точное имя бакета «%1$s».</string>
+    <string name="object_storage_delete_confirm">Удалить бакет навсегда</string>
+    <string name="object_storage_bucket_not_empty">Бакет не пуст. Сначала удалите объекты в специализированном S3-клиенте.</string>
+    <string name="object_storage_request_failed">Object Storage не смог выполнить запрос. Проверьте выбранный endpoint и S3-ключи, затем повторите попытку.</string>
 </resources>

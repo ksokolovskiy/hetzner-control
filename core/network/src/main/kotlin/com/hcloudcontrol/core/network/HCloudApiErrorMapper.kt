@@ -32,7 +32,10 @@ internal object HCloudErrorParser {
     private val authorization = Regex("(?i)authorization\\s*[:=]\\s*bearer\\s+[^\\s,;]+")
     private val bearer = Regex("(?i)bearer\\s+[A-Za-z0-9._~-]+")
     private val secretAssignment = Regex("(?i)(root_password|password|token|api[_-]?key)\\s*[:=]\\s*[^\\s,;]+")
-    private val requestPayload = Regex("(?i)request\\s*[:=]\\s*(\\{.*}|\\[.*]|[^\\s,;]+)")
+    // Android's ICU regex implementation treats an unescaped `}` as a syntax error, whereas
+    // the desktop/JVM implementation accepted the old expression. Escape both delimiters so
+    // sanitising an API error can never take down an OkHttp dispatcher thread.
+    private val requestPayload = Regex("(?i)request\\s*[:=]\\s*(\\{.*\\}|\\[.*\\]|[^\\s,;]+)")
 
     fun parse(httpStatus: Int, body: String?): HCloudApiFailure {
         val error = runCatching { body?.let(errorAdapter::fromJson)?.error }.getOrNull()

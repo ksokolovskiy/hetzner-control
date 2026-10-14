@@ -3,26 +3,23 @@ package com.hcloudcontrol.core.security
 import android.content.Context
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
-import java.util.UUID
-
-/** Non-secret metadata for an independent Storage Box API connection. */
-data class StorageBoxConnection(val id: String, val displayName: String)
+/** Non-secret metadata retained only so a user can explicitly erase an old credential. */
+data class LegacyStorageBoxCredential(val id: String, val displayName: String)
 
 /**
- * A credential boundary separate from [HCloudTokenStore]. Storage Box credentials must never
- * be read from, or written to, the Cloud profile store.
+ * Read-only migration boundary for versions which incorrectly asked users for a second token.
+ *
+ * Storage Box lifecycle requests at `api.hetzner.com` use the selected Hetzner project API token.
+ * Existing encrypted values are deliberately not exposed, copied, or reused: they are retained
+ * until the user explicitly removes them from the migration notice.
  */
-interface StorageBoxTokenStore {
-    fun token(): String?
-    fun connections(): List<StorageBoxConnection>
-    fun activeConnectionId(): String?
-    fun selectConnection(connectionId: String)
-    fun saveConnection(displayName: String, token: String): StorageBoxConnection
-    fun removeConnection(connectionId: String)
+interface LegacyStorageBoxCredentialStore {
+    fun credentials(): List<LegacyStorageBoxCredential>
+    fun removeCredential(credentialId: String)
 }
 
-/** Token storage encrypted at rest with a separate Android Keystore-backed preference file. */
-class EncryptedStorageBoxTokenStore(context: Context) : StorageBoxTokenStore {
+/** Reads the legacy encrypted preference file without ever returning its secret values. */
+class EncryptedLegacyStorageBoxCredentialStore(context: Context) : LegacyStorageBoxCredentialStore {
     private val preferences = EncryptedSharedPreferences.create(
         context,
         FILE_NAME,
@@ -31,48 +28,24 @@ class EncryptedStorageBoxTokenStore(context: Context) : StorageBoxTokenStore {
         EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
     )
 
-    override fun token(): String? = activeConnectionId()?.let(::tokenFor)
-
-    override fun connections(): List<StorageBoxConnection> = preferences.getStringSet(CONNECTION_IDS_KEY, emptySet())
+    override fun credentials(): List<LegacyStorageBoxCredential> = preferences.getStringSet(CONNECTION_IDS_KEY, emptySet())
         .orEmpty()
-        .mapNotNull { id -> preferences.getString(nameKey(id), null)?.let { StorageBoxConnection(id, it) } }
+        .mapNotNull { id -> preferences.getString(nameKey(id), null)?.let { LegacyStorageBoxCredential(id, it) } }
         .sortedBy { it.displayName.lowercase() }
 
-    override fun activeConnectionId(): String? = preferences.getString(ACTIVE_CONNECTION_KEY, null)
-
-    override fun selectConnection(connectionId: String) {
-        require(connections().any { it.id == connectionId }) { "Unknown Storage Box connection" }
-        preferences.edit().putString(ACTIVE_CONNECTION_KEY, connectionId).apply()
-    }
-
-    override fun saveConnection(displayName: String, token: String): StorageBoxConnection {
-        require(displayName.isNotBlank()) { "Storage Box connection name must not be blank" }
-        require(token.isNotBlank()) { "Storage Box API token must not be blank" }
-        val connection = StorageBoxConnection(UUID.randomUUID().toString(), displayName.trim())
-        val ids = preferences.getStringSet(CONNECTION_IDS_KEY, emptySet()).orEmpty().toMutableSet().apply { add(connection.id) }
-        preferences.edit()
-            .putStringSet(CONNECTION_IDS_KEY, ids)
-            .putString(nameKey(connection.id), connection.displayName)
-            .putString(tokenKey(connection.id), token.trim())
-            .putString(ACTIVE_CONNECTION_KEY, connection.id)
-            .apply()
-        return connection
-    }
-
-    override fun removeConnection(connectionId: String) {
-        val remaining = connections().filterNot { it.id == connectionId }
-        val nextActive = activeConnectionId()?.takeIf { it != connectionId } ?: remaining.firstOrNull()?.id
+    override fun removeCredential(credentialId: String) {
+        val remaining = credentials().filterNot { it.id == credentialId }
+        val activeConnectionId = preferences.getString(ACTIVE_CONNECTION_KEY, null)
+        val nextActive = activeConnectionId?.takeIf { it != credentialId } ?: remaining.firstOrNull()?.id
         preferences.edit()
             .putStringSet(CONNECTION_IDS_KEY, remaining.mapTo(mutableSetOf()) { it.id })
-            .remove(nameKey(connectionId))
-            .remove(tokenKey(connectionId))
+            .remove(nameKey(credentialId))
+            .remove(tokenKey(credentialId))
             .apply {
                 if (nextActive == null) remove(ACTIVE_CONNECTION_KEY) else putString(ACTIVE_CONNECTION_KEY, nextActive)
             }
             .apply()
     }
-
-    private fun tokenFor(connectionId: String): String? = preferences.getString(tokenKey(connectionId), null)
 
     private companion object {
         const val FILE_NAME = "storage_box_secure_credentials"

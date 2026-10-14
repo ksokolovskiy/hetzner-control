@@ -1,5 +1,6 @@
 package com.hcloudcontrol
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -47,6 +48,7 @@ import kotlinx.coroutines.withContext
 internal fun DnsReadOnlyScreen(projectId: String, repository: DnsRepository) {
     var acknowledged by remember(projectId) { mutableStateOf(false) }
     var selectedZone by remember(projectId) { mutableStateOf<DnsZone?>(null) }
+    BackHandler(enabled = selectedZone != null) { selectedZone = null }
     var refreshKey by remember(projectId) { mutableStateOf(0) }
     var state by remember(projectId) { mutableStateOf<DnsZonesState>(DnsZonesState.Idle) }
     val scope = rememberCoroutineScope()
@@ -77,6 +79,7 @@ internal fun DnsReadOnlyScreen(projectId: String, repository: DnsRepository) {
     }
 
     LazyColumn(
+        state = rememberRestorableLazyListState("dns-zones"),
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),

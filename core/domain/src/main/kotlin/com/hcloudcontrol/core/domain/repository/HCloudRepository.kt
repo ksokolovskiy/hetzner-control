@@ -1,6 +1,5 @@
 package com.hcloudcontrol.core.domain.repository
 
-import com.hcloudcontrol.core.domain.model.Profile
 import com.hcloudcontrol.core.domain.model.CloudAction
 import com.hcloudcontrol.core.domain.model.CreateServerSpec
 import com.hcloudcontrol.core.domain.model.CreatedServer
@@ -53,7 +52,6 @@ import com.hcloudcontrol.core.domain.model.RebuiltServerResult
 
 /** Boundary for Hetzner Cloud data. Implementations must never expose the API token. */
 interface HCloudRepository {
-    suspend fun getProfile(): Profile
     suspend fun getServers(): List<Server>
     suspend fun getServer(serverId: Long): Server
     /** Permanently removes a server. UI callers must require an explicit typed confirmation. */

@@ -12,53 +12,53 @@ import org.junit.Test
 
 class ConnectionIsolationContractTest {
     @Test
-    fun cloudProjectsAndStorageBoxSendOnlyTheirOwnBearerCredentials() = runBlocking {
+    fun storageBoxUsesTheSelectedProjectsBearerCredential() = runBlocking {
         MockWebServer().use { firstCloud ->
             MockWebServer().use { secondCloud ->
                 MockWebServer().use { storageBox ->
-                    firstCloud.enqueue(MockResponse().setBody(profileResponse("first")))
-                    secondCloud.enqueue(MockResponse().setBody(profileResponse("second")))
+                    firstCloud.enqueue(MockResponse().setBody(serversResponse()))
+                    secondCloud.enqueue(MockResponse().setBody(serversResponse()))
                     storageBox.enqueue(MockResponse().setBody("""{"storage_boxes":[]}"""))
 
                     val diagnostics = mutableListOf<HCloudApiDiagnostic>()
                     val firstCloudApi = HCloudApiFactory.create(
-                        tokenProvider = { "cloud-project-one-token" },
+                        tokenProvider = { "test-a" },
                         configProvider = {
                             HCloudConnectionConfig(ConnectionKind.REAL, firstCloud.url("/v1").toString())
                         },
                         diagnosticsLogger = HCloudApiDiagnosticsLogger(diagnostics::add),
                     )
                     val secondCloudApi = HCloudApiFactory.create(
-                        tokenProvider = { "cloud-project-two-token" },
+                        tokenProvider = { "test-b" },
                         configProvider = {
                             HCloudConnectionConfig(ConnectionKind.REAL, secondCloud.url("/v1").toString())
                         },
                         diagnosticsLogger = HCloudApiDiagnosticsLogger(diagnostics::add),
                     )
                     val storageBoxApi = StorageBoxApiFactory.create(
-                        tokenProvider = { "storage-box-only-token" },
+                        // Storage Box has its own host, but is scoped by the active project token.
+                        tokenProvider = { "test-a" },
                         baseUrl = storageBox.url("/v1/").toString(),
                         diagnosticsLogger = HCloudApiDiagnosticsLogger(diagnostics::add),
                     )
 
-                    assertEquals("first", firstCloudApi.getProfile().profile.name)
-                    assertEquals("second", secondCloudApi.getProfile().profile.name)
+                    assertTrue(firstCloudApi.getServers().servers.isEmpty())
+                    assertTrue(secondCloudApi.getServers().servers.isEmpty())
                     storageBoxApi.getStorageBoxes()
 
                     val firstRequest = requireNotNull(firstCloud.takeRequest())
                     val secondRequest = requireNotNull(secondCloud.takeRequest())
                     val storageRequest = requireNotNull(storageBox.takeRequest())
-                    assertEquals("Bearer cloud-project-one-token", firstRequest.getHeader("Authorization"))
-                    assertEquals("Bearer cloud-project-two-token", secondRequest.getHeader("Authorization"))
-                    assertEquals("Bearer storage-box-only-token", storageRequest.getHeader("Authorization"))
-                    assertNoOtherCredential(firstRequest.toString(), "cloud-project-two-token", "storage-box-only-token")
-                    assertNoOtherCredential(secondRequest.toString(), "cloud-project-one-token", "storage-box-only-token")
-                    assertNoOtherCredential(storageRequest.toString(), "cloud-project-one-token", "cloud-project-two-token")
+                    assertEquals("Bearer test-a", firstRequest.getHeader("Authorization"))
+                    assertEquals("Bearer test-b", secondRequest.getHeader("Authorization"))
+                    assertEquals("Bearer test-a", storageRequest.getHeader("Authorization"))
+                    assertNoOtherCredential(firstRequest.toString(), "test-b")
+                    assertNoOtherCredential(secondRequest.toString(), "test-a")
+                    assertNoOtherCredential(storageRequest.toString(), "test-b")
                     assertDiagnosticsAreCredentialFree(
                         diagnostics,
-                        "cloud-project-one-token",
-                        "cloud-project-two-token",
-                        "storage-box-only-token",
+                        "test-a",
+                        "test-b",
                     )
                 }
             }
@@ -69,35 +69,35 @@ class ConnectionIsolationContractTest {
     fun testMockRouteAndTokenCannotAffectARealCloudClient() = runBlocking {
         MockWebServer().use { realCloud ->
             MockWebServer().use { testMock ->
-                realCloud.enqueue(MockResponse().setBody(profileResponse("real-project")))
-                testMock.enqueue(MockResponse().setBody(profileResponse("test-project")))
+                realCloud.enqueue(MockResponse().setBody(serversResponse()))
+                testMock.enqueue(MockResponse().setBody(serversResponse()))
 
                 val realApi = HCloudApiFactory.create(
-                    tokenProvider = { "real-project-token" },
+                    tokenProvider = { "real-a" },
                     configProvider = {
                         HCloudConnectionConfig(ConnectionKind.REAL, realCloud.url("/v1").toString())
                     },
                     diagnosticsLogger = HCloudApiDiagnosticsLogger { },
                 )
                 val testMockApi = HCloudApiFactory.create(
-                    tokenProvider = { "test-mock-token" },
+                    tokenProvider = { "mock-b" },
                     configProvider = {
                         HCloudConnectionConfig(ConnectionKind.TEST_MOCK, testMock.url("/hcloud-mock/v1").toString())
                     },
                     diagnosticsLogger = HCloudApiDiagnosticsLogger { },
                 )
 
-                assertEquals("real-project", realApi.getProfile().profile.name)
-                assertEquals("test-project", testMockApi.getProfile().profile.name)
+                assertTrue(realApi.getServers().servers.isEmpty())
+                assertTrue(testMockApi.getServers().servers.isEmpty())
 
                 val realRequest = requireNotNull(realCloud.takeRequest())
                 val testRequest = requireNotNull(testMock.takeRequest())
-                assertEquals("/v1/profile", realRequest.path)
-                assertEquals("/hcloud-mock/v1/profile", testRequest.path)
-                assertEquals("Bearer real-project-token", realRequest.getHeader("Authorization"))
-                assertEquals("Bearer test-mock-token", testRequest.getHeader("Authorization"))
-                assertNoOtherCredential(realRequest.toString(), "test-mock-token")
-                assertNoOtherCredential(testRequest.toString(), "real-project-token")
+                assertEquals("/v1/servers?page=1&per_page=50", realRequest.path)
+                assertEquals("/hcloud-mock/v1/servers?page=1&per_page=50", testRequest.path)
+                assertEquals("Bearer real-a", realRequest.getHeader("Authorization"))
+                assertEquals("Bearer mock-b", testRequest.getHeader("Authorization"))
+                assertNoOtherCredential(realRequest.toString(), "mock-b")
+                assertNoOtherCredential(testRequest.toString(), "real-a")
             }
         }
     }
@@ -106,34 +106,34 @@ class ConnectionIsolationContractTest {
     fun `one shared Cloud client switches route and credential with the active project`() = runBlocking {
         MockWebServer().use { firstProject ->
             MockWebServer().use { secondProject ->
-                firstProject.enqueue(MockResponse().setBody(profileResponse("first-project")))
-                secondProject.enqueue(MockResponse().setBody(profileResponse("second-project")))
+                firstProject.enqueue(MockResponse().setBody(serversResponse()))
+                secondProject.enqueue(MockResponse().setBody(serversResponse()))
 
                 var activeConfig = HCloudConnectionConfig(ConnectionKind.REAL, firstProject.url("/v1").toString())
-                var activeToken = "first-project-token"
+                var activeToken = "first-a"
                 val api = HCloudApiFactory.create(
                     tokenProvider = { activeToken },
                     configProvider = { activeConfig },
                     diagnosticsLogger = HCloudApiDiagnosticsLogger { },
                 )
 
-                assertEquals("first-project", api.getProfile().profile.name)
+                assertTrue(api.getServers().servers.isEmpty())
                 activeConfig = HCloudConnectionConfig(ConnectionKind.REAL, secondProject.url("/v1").toString())
-                activeToken = "second-project-token"
-                assertEquals("second-project", api.getProfile().profile.name)
+                activeToken = "second-b"
+                assertTrue(api.getServers().servers.isEmpty())
 
                 val firstRequest = requireNotNull(firstProject.takeRequest())
                 val secondRequest = requireNotNull(secondProject.takeRequest())
-                assertEquals("Bearer first-project-token", firstRequest.getHeader("Authorization"))
-                assertEquals("Bearer second-project-token", secondRequest.getHeader("Authorization"))
-                assertFalse(firstRequest.toString().contains("second-project-token"))
-                assertFalse(secondRequest.toString().contains("first-project-token"))
+                assertEquals("Bearer first-a", firstRequest.getHeader("Authorization"))
+                assertEquals("Bearer second-b", secondRequest.getHeader("Authorization"))
+                assertFalse(firstRequest.toString().contains("second-b"))
+                assertFalse(secondRequest.toString().contains("first-a"))
             }
         }
     }
 
     @Test
-    fun `missing Storage Box credential fails before a Cloud credential can be sent`() = runBlocking {
+    fun `missing active project credential fails before a Storage Box request can be sent`() = runBlocking {
         MockWebServer().use { storageBox ->
             val diagnostics = mutableListOf<HCloudApiDiagnostic>()
             val api = StorageBoxApiFactory.create(
@@ -150,7 +150,12 @@ class ConnectionIsolationContractTest {
         }
     }
 
-    private fun profileResponse(name: String) = """{"profile":{"id":1,"name":"$name","email":"$name@example.invalid"}}"""
+    @Test
+    fun `Cloud API intentionally exposes no undocumented profile route`() {
+        assertFalse(HCloudApi::class.java.methods.any { it.name == "getProfile" })
+    }
+
+    private fun serversResponse() = """{"servers":[],"meta":{"pagination":{"next_page":null}}}"""
 
     private fun assertNoOtherCredential(request: String, vararg excludedCredentials: String) {
         excludedCredentials.forEach { credential ->

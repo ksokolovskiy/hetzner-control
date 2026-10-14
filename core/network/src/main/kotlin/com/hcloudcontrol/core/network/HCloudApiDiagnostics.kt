@@ -1,7 +1,6 @@
 package com.hcloudcontrol.core.network
 
 import android.util.Log
-import com.hcloudcontrol.core.domain.model.HCloudApiException
 import com.hcloudcontrol.core.domain.model.HCloudApiFailure
 import java.io.IOException
 import okhttp3.Interceptor
@@ -28,9 +27,14 @@ internal fun interface HCloudApiDiagnosticsLogger {
 }
 
 /**
- * Central diagnostics and error boundary for every Retrofit call made by [HCloudApiFactory].
- * It intentionally never reads request bodies and only peeks at error bodies for the documented
- * Hetzner error envelope.
+ * Central diagnostics boundary for every Retrofit call made by [HCloudApiFactory].
+ *
+ * This interceptor must be observational: an OkHttp interceptor runs on OkHttp's dispatcher,
+ * where throwing an application [RuntimeException] can bypass Retrofit's suspend continuation
+ * and terminate the process.  Retrofit owns delivery of non-2xx responses to the calling
+ * coroutine; repository boundaries then turn its [retrofit2.HttpException] into the typed,
+ * safe domain failure used by the UI.  It intentionally never reads request bodies and only
+ * peeks at error bodies for the documented Hetzner error envelope.
  */
 internal class HCloudApiDiagnosticsInterceptor(
     private val logger: HCloudApiDiagnosticsLogger = AndroidHCloudApiDiagnosticsLogger,
@@ -54,8 +58,9 @@ internal class HCloudApiDiagnosticsInterceptor(
                 response.peekBody(MAX_DIAGNOSTIC_ERROR_BODY_BYTES).string(),
             ).copy(requestId = response.safeRequestId())
             logger.log(failure.toDiagnostic(method, path, elapsed, response.safeRequestId()))
-            response.close()
-            throw HCloudApiException(failure)
+            // Do not close or throw here. Retrofit needs this response to resume the caller
+            // with HttpException, which safeHCloudApiCall maps on the caller's coroutine.
+            return response
         } catch (exception: MissingApiTokenException) {
             // This is a local configuration failure, not an API attempt. Do not turn it into a
             // misleading network diagnostic and never fabricate a request record.

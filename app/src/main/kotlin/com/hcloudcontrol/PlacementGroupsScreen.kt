@@ -1,5 +1,6 @@
 package com.hcloudcontrol
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -50,6 +51,7 @@ internal fun PlacementGroupsScreen(repository: HCloudRepository, projectId: Stri
     var state by remember(projectId) { mutableStateOf<PlacementGroupsState>(PlacementGroupsState.Loading) }
     var refreshKey by remember(projectId) { mutableStateOf(0) }
     var selectedGroup by remember(projectId) { mutableStateOf<PlacementGroupInventory?>(null) }
+    BackHandler(enabled = selectedGroup != null) { selectedGroup = null }
     var createRequested by remember(projectId) { mutableStateOf(false) }
     val highImpactAllowed = LocalHighImpactOperations.current.isAllowed
     val scope = rememberCoroutineScope()
@@ -107,6 +109,7 @@ private fun PlacementGroupsList(
     onCreate: () -> Unit,
     onClick: (PlacementGroupInventory) -> Unit,
 ) = LazyColumn(
+    state = rememberRestorableLazyListState("placement-groups"),
     modifier = Modifier.fillMaxSize(),
     contentPadding = PaddingValues(16.dp),
     verticalArrangement = Arrangement.spacedBy(12.dp),

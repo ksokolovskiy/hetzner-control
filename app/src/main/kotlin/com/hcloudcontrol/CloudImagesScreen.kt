@@ -1,5 +1,6 @@
 package com.hcloudcontrol
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -49,6 +50,7 @@ internal fun CloudImagesScreen(repository: HCloudRepository, projectId: String) 
     var state by remember(projectId) { mutableStateOf<CloudImagesState>(CloudImagesState.Loading) }
     var refreshKey by remember(projectId) { mutableStateOf(0) }
     var selectedImage by remember(projectId) { mutableStateOf<CloudImageInventory?>(null) }
+    BackHandler(enabled = selectedImage != null) { selectedImage = null }
     val scope = rememberCoroutineScope()
     val loadError = stringResource(R.string.images_load_error)
     fun load() {
@@ -72,7 +74,11 @@ internal fun CloudImagesScreen(repository: HCloudRepository, projectId: String) 
         is CloudImagesState.Error -> StateView(
             stringResource(R.string.images_title), current.message, stringResource(R.string.common_retry), { refreshKey++ },
         )
-        is CloudImagesState.Content -> CloudImagesList(images = current.images, onImageClick = { selectedImage = it })
+        is CloudImagesState.Content -> CloudImagesList(
+            images = current.images,
+            onRefresh = { refreshKey++ },
+            onImageClick = { selectedImage = it },
+        )
     }
 }
 
@@ -96,13 +102,19 @@ private enum class CloudImageFilter(val apiType: String?, val labelRes: Int) {
 }
 
 @Composable
-private fun CloudImagesList(images: List<CloudImageInventory>, onImageClick: (CloudImageInventory) -> Unit) {
+private fun CloudImagesList(
+    images: List<CloudImageInventory>,
+    onRefresh: () -> Unit,
+    onImageClick: (CloudImageInventory) -> Unit,
+) {
     var filter by remember { mutableStateOf(CloudImageFilter.ALL) }
     val filtered = remember(images, filter) {
         images.filter { filter.apiType == null || it.type.equals(filter.apiType, ignoreCase = true) }
             .sortedWith(compareBy<CloudImageInventory> { it.name.orEmpty().lowercase() }.thenBy { it.id })
     }
+    HCloudPullToRefresh(isRefreshing = false, onRefresh = onRefresh, modifier = Modifier.fillMaxSize()) {
     LazyColumn(
+        state = rememberRestorableLazyListState("images"),
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -132,6 +144,7 @@ private fun CloudImagesList(images: List<CloudImageInventory>, onImageClick: (Cl
         } else {
             items(filtered, key = { it.id }) { image -> CloudImageCard(image) { onImageClick(image) } }
         }
+    }
     }
 }
 

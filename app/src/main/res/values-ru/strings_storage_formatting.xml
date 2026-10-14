@@ -1,0 +1,9 @@
+<resources>
+    <string name="storage_boxes_usage_formatted">Данные: %1$s из %2$s</string>
+    <string name="storage_boxes_total_formatted">Всего: %1$s</string>
+    <string name="storage_boxes_data_formatted">Данные: %1$s</string>
+    <string name="storage_boxes_snapshots_formatted">Снимки: %1$s</string>
+    <string name="storage_operations_locked">Действия — создание, подключение, отключение, увеличение размера и изменение защиты от удаления — скрыты. Включите операции повышенного риска в настройках, чтобы просмотреть и выполнить их.</string>
+    <string name="storage_volume_protection_details">Откройте этот volume, чтобы изменить защиту от удаления.</string>
+    <string name="storage_inventory_description_active">Инвентарь volumes, snapshots и backups текущего Cloud project. Проверяйте каждое действие перед отправкой в Hetzner Cloud.</string>
+</resources>

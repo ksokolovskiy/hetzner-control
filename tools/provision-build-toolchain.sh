@@ -16,8 +16,9 @@ fail() {
 check_toolchain() {
     root="$1"
     [ -x "$root/jdk21/bin/java" ] || return 1
-    [ -x "$root/gradle-9.4.1/bin/gradle" ] || return 1
+    [ -x "$root/gradle-8.13/bin/gradle" ] || return 1
     [ -d "$root/android-sdk" ] || return 1
+    [ -d "$root/android-sdk/platforms/android-36" ] || return 1
     [ -d "$root/x86_64-linux/usr/lib/x86_64-linux-gnu" ] || return 1
     [ -r "$root/x86_64-linux/usr/lib64/ld-linux-x86-64.so.2" ] || return 1
 }
@@ -41,7 +42,7 @@ check_toolchain "$SOURCE" || fail "source toolchain is incomplete: $SOURCE"
 
 mkdir -p "$(dirname -- "$DESTINATION")"
 mkdir "$DESTINATION"
-for component in jdk21 gradle-9.4.1 android-sdk x86_64-linux; do
+for component in jdk21 gradle-8.13 android-sdk x86_64-linux; do
     cp -a "$SOURCE/$component" "$DESTINATION/"
 done
 

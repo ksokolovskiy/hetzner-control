@@ -5,7 +5,7 @@ bounded implementation plan. It is **not** an implementation of any mutation.
 The permission is intentionally off by default and all controls below remain
 hidden until the profile-level permission has been enabled in Settings.
 
-The source of truth is the official [Hetzner Cloud API reference](https://docs.hetzner.cloud/reference/cloud), the [Cloud changelog](https://docs.hetzner.cloud/changelog), and the separate [Storage Box API reference](https://docs.hetzner.cloud/reference/hetzner#tag/storage-boxes), checked on 2026-10-14. Cloud requests use the selected project's `api.hetzner.cloud/v1` bearer token; Storage Box requests use its separately stored `api.hetzner.com/v1` bearer token. A Cloud-project token must never be silently reused for Storage Box.
+The source of truth is the official [Hetzner Cloud API reference](https://docs.hetzner.cloud/reference/cloud), the [Cloud changelog](https://docs.hetzner.cloud/changelog), and the separate [Storage Box API reference](https://docs.hetzner.cloud/reference/hetzner#tag/storage-boxes), checked on 2026-10-14. Cloud requests use the selected project's `api.hetzner.cloud/v1` bearer token; Storage Box lifecycle requests use that same selected-project bearer token with `api.hetzner.com/v1`. An old separately stored Storage Box credential must never be silently reused.
 
 ## Permission and universal UX contract
 

@@ -23,9 +23,17 @@ fi
 # tracked text. Documentation must use placeholders, not a developer's phone
 # or server address. The pattern is intentionally conservative; this is a
 # guardrail, not a replacement for a maintained secret scanner in CI.
-forbidden_content_pattern='(-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----|github_pat_[A-Za-z0-9_]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{20,}|xox[baprs]-[A-Za-z0-9-]{20,}|Bearer[[:space:]]+[A-Za-z0-9._~-]{20,}|(^|[^0-9])(10|127)\.[0-9]{1,3}\.[0-9]{1,3}|192\.168\.[0-9]{1,3}\.[0-9]{1,3}|172\.(1[6-9]|2[0-9]|3[0-1])\.[0-9]{1,3}\.[0-9]{1,3})'
-if git -C "$PROJECT_DIR" grep -n -I -E "$forbidden_content_pattern" -- .; then
-    fail "a credential-shaped value or private endpoint is present in tracked text"
+credential_content_pattern='(-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----|github_pat_[A-Za-z0-9_]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{20,}|xox[baprs]-[A-Za-z0-9-]{20,}|Bearer[[:space:]]+[A-Za-z0-9._~-]{20,})'
+if git -C "$PROJECT_DIR" grep -n -I -E "$credential_content_pattern" -- .; then
+    fail "a credential-shaped value is present in tracked text"
+fi
+
+# RFC1918 ranges are valid contract fixtures for Cloud Networks, so do not
+# reject them under src/test. Credentials above are still scanned everywhere,
+# including tests. Outside tests, private endpoints remain forbidden.
+private_endpoint_pattern='(^|[^0-9])(10|127)\.[0-9]{1,3}\.[0-9]{1,3}|192\.168\.[0-9]{1,3}\.[0-9]{1,3}|172\.(1[6-9]|2[0-9]|3[0-1])\.[0-9]{1,3}\.[0-9]{1,3}'
+if git -C "$PROJECT_DIR" grep -n -I -E "$private_endpoint_pattern" -- . ':(exclude)**/src/test/**'; then
+    fail "a private endpoint is present outside tracked test fixtures"
 fi
 
 echo "Repository hygiene check passed."

@@ -1,5 +1,6 @@
 package com.hcloudcontrol
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -48,6 +49,7 @@ internal fun LoadBalancerTypesScreen(repository: HCloudRepository, projectId: St
     var refreshKey by remember(projectId) { mutableIntStateOf(0) }
     var state by remember(projectId) { mutableStateOf<LoadBalancerTypesState>(LoadBalancerTypesState.Loading) }
     var selected by remember(projectId) { mutableStateOf<LoadBalancerTypeInventory?>(null) }
+    BackHandler(enabled = selected != null) { selected = null }
     LaunchedEffect(projectId, refreshKey) {
         state = LoadBalancerTypesState.Loading
         state = try {
@@ -63,6 +65,7 @@ internal fun LoadBalancerTypesScreen(repository: HCloudRepository, projectId: St
         return
     }
     LazyColumn(
+        state = rememberRestorableLazyListState("load-balancer-types"),
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -152,7 +155,7 @@ private fun LoadBalancerTypeDetails(type: LoadBalancerTypeInventory) = Column(ve
     Text(stringResource(R.string.load_balancer_types_prices_note), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     if (type.prices.isEmpty()) Text(stringResource(R.string.load_balancer_types_prices_empty))
     type.prices.sortedBy { it.location }.forEach { price ->
-        Text(stringResource(R.string.load_balancer_types_price, price.location, price.hourly.gross, price.monthly.gross))
+        Text(stringResource(R.string.load_balancer_types_price, price.location, formatApiMoney(price.hourly.gross), formatApiMoney(price.monthly.gross)))
     }
     Text(stringResource(R.string.load_balancer_types_read_only), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }

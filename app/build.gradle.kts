@@ -15,6 +15,33 @@ private val supportedAppLocales = linkedMapOf(
     "GERMAN" to "de",
 )
 
+private val playSigningPropertiesFile = rootProject.file("signing.properties")
+private val playSigningProperties = Properties().apply {
+    if (playSigningPropertiesFile.isFile) {
+        playSigningPropertiesFile.inputStream().use(::load)
+    }
+}
+private val playSigningKeys = listOf("storeFile", "storePassword", "keyAlias", "keyPassword")
+private val hasCompletePlaySigning = playSigningKeys.all { key ->
+    !playSigningProperties.getProperty(key).isNullOrBlank()
+}
+private val requirePlaySigning = providers.gradleProperty("requirePlaySigning")
+    .map { value -> value.toBooleanStrictOrNull() ?: false }
+    .getOrElse(false)
+
+if (playSigningPropertiesFile.exists() && !hasCompletePlaySigning) {
+    throw GradleException(
+        "signing.properties exists but does not define every required Play signing value. " +
+            "See signing.properties.example.",
+    )
+}
+if (requirePlaySigning && !hasCompletePlaySigning) {
+    throw GradleException(
+        "A signed Play bundle was requested, but signing.properties is unavailable or incomplete. " +
+            "See signing.properties.example.",
+    )
+}
+
 private fun localizedResourceKeys(file: File): Map<String, String> {
     val document = DocumentBuilderFactory.newInstance().apply {
         setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
@@ -128,12 +155,12 @@ val verifyLocalizationIntegrity by tasks.registering {
 
 android {
     namespace = "com.hcloudcontrol"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.hcloudcontrol"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 1
         versionName = "0.1.0"
     }
@@ -144,10 +171,41 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
+
+    if (hasCompletePlaySigning) {
+        signingConfigs.create("playRelease") {
+            storeFile = rootProject.file(playSigningProperties.getProperty("storeFile"))
+            storePassword = playSigningProperties.getProperty("storePassword")
+            keyAlias = playSigningProperties.getProperty("keyAlias")
+            keyPassword = playSigningProperties.getProperty("keyPassword")
+        }
+        buildTypes.named("release") {
+            signingConfig = signingConfigs.getByName("playRelease")
+        }
+    }
 }
 
 tasks.named("preBuild") {
     dependsOn(verifyLocalizationIntegrity)
+}
+
+val verifyPlayReleaseSigning by tasks.registering {
+    group = "verification"
+    description = "Fails unless release signing has been configured outside source control."
+    doLast {
+        if (!hasCompletePlaySigning) {
+            throw GradleException(
+                "Play release signing is not configured. Copy signing.properties.example to the ignored " +
+                    "signing.properties file and provide the upload-key values outside the repository.",
+            )
+        }
+    }
+}
+
+if (requirePlaySigning) {
+    tasks.matching { task -> task.name == "bundleRelease" }.configureEach {
+        dependsOn(verifyPlayReleaseSigning)
+    }
 }
 
 dependencies {

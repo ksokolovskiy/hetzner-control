@@ -1,6 +1,8 @@
 package com.hcloudcontrol.core.network
 
 import com.hcloudcontrol.core.domain.model.HCloudApiException
+import com.hcloudcontrol.core.domain.model.HCloudConnectionConfig
+import com.hcloudcontrol.core.domain.model.ConnectionKind
 import java.io.IOException
 import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
@@ -56,7 +58,7 @@ class HCloudApiDiagnosticsInterceptorTest {
     }
 
     @Test
-    fun `HTTP error log and typed exception expose only safe parsed detail`() {
+    fun `HTTP error log is passive and exposes only safe parsed detail`() {
         val token = "never-log-token"
         val rootPassword = "never-log-root-password"
         server.enqueue(
@@ -73,20 +75,11 @@ class HCloudApiDiagnosticsInterceptorTest {
         val diagnostics = mutableListOf<HCloudApiDiagnostic>()
         val client = client(diagnostics)
 
-        val thrown = runCatching {
-            client.newCall(Request.Builder().url(server.url("/v1/servers/77?label_selector=secret=value")).build()).execute()
-        }.exceptionOrNull()
-
-        assertTrue(thrown is HCloudApiException)
-        val failure = (thrown as HCloudApiException).failure
-        assertEquals(422, failure.httpStatus)
-        assertEquals("invalid_input", failure.code)
-        assertEquals("request-422", failure.requestId)
-        assertEquals(listOf("server_type", "location"), failure.fieldNames)
-        assertFalse(failure.apiMessage!!.contains(token))
-        assertFalse(failure.apiMessage!!.contains(rootPassword))
-        assertFalse(failure.apiMessage!!.contains("secret-host"))
-        assertFalse(thrown.message!!.contains(token))
+        client.newCall(Request.Builder().url(server.url("/v1/servers/77?label_selector=secret=value")).build()).execute().use { response ->
+            // The interceptor is only a diagnostic observer.  It must return non-2xx responses
+            // to Retrofit instead of throwing on OkHttp's dispatcher thread.
+            assertEquals(422, response.code)
+        }
 
         val event = diagnostics.single()
         assertEquals("/v1/servers/{id}", event.redactedPath)
@@ -186,6 +179,31 @@ class HCloudApiDiagnosticsInterceptorTest {
         assertFalse(error.toString().contains(token))
         assertFalse(error.toString().contains(rootPassword))
         assertFalse(error.toString().contains("secret"))
+    }
+
+    @Test
+    fun `unsupported endpoint response is resumed to caller and mapped at repository boundary`() = runBlocking {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(404)
+                .setHeader("X-Request-ID", "route-not-found")
+                .setBody("""{"error":{"code":"not_found","message":"route is unavailable"}}"""),
+        )
+        val diagnostics = mutableListOf<HCloudApiDiagnostic>()
+        val api = HCloudApiFactory.create(
+            tokenProvider = { "test-token" },
+            configProvider = { HCloudConnectionConfig(ConnectionKind.REAL, server.url("/v1/").toString()) },
+            diagnosticsLogger = HCloudApiDiagnosticsLogger(diagnostics::add),
+        )
+
+        val failure = runCatching { safeHCloudApiCall { api.getServers() } }.exceptionOrNull()
+
+        assertTrue(failure is HCloudApiException)
+        assertEquals(404, (failure as HCloudApiException).failure.httpStatus)
+        assertEquals("not_found", failure.failure.code)
+        assertEquals("route-not-found", failure.failure.requestId)
+        assertEquals(1, diagnostics.size)
+        assertEquals(404, diagnostics.single().httpStatus)
     }
 
     private fun client(diagnostics: MutableList<HCloudApiDiagnostic>): OkHttpClient = OkHttpClient.Builder()

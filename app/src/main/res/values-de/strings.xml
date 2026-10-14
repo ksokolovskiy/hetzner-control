@@ -10,6 +10,9 @@
     <string name="onboarding_test_token_label">Testserver-API-Token</string>
     <string name="onboarding_test_token_error">Geben Sie das Token des Testservers ein</string>
     <string name="onboarding_open_test_server">Testserver öffnen</string>
+    <string name="onboarding_save_error">Die Verbindung konnte auf diesem Gerät nicht gespeichert werden. Versuchen Sie es erneut.</string>
+    <string name="onboarding_test_server_connected">Testserver-Profil wurde gespeichert und geöffnet</string>
+    <string name="onboarding_project_connected">Cloud-Projekt wurde gespeichert und geöffnet</string>
     <string name="test_server_badge">TESTSERVER · TEMPORÄR</string>
     <string name="storage_boxes_title">Storage Boxes</string><string name="storage_boxes_add_connection">Verbindung hinzufügen</string><string name="storage_boxes_separate_credentials">Storage Box verwendet ein separates API-Token. Ihr Hetzner-Cloud-Token wird nie wiederverwendet.</string><string name="storage_boxes_loading">Storage Boxes werden geladen…</string><string name="storage_boxes_load_error">Storage Boxes konnten nicht geladen werden. Prüfen Sie das separate Storage-Box-Token und versuchen Sie es erneut.</string><string name="storage_boxes_error_title">Storage Boxes konnten nicht geladen werden</string><string name="storage_boxes_retry">Erneut versuchen</string><string name="storage_boxes_empty_title">Keine Storage Boxes</string><string name="storage_boxes_empty_message">Diese Verbindung hat keine Storage Boxes.</string><string name="storage_boxes_pagination_note">Alle verfügbaren Seiten dieser Verbindung wurden geladen.</string><string name="storage_boxes_connect_title">Storage Box verbinden</string><string name="storage_boxes_connect_explanation">Verwenden Sie ein separates Storage-Box-API-Token. Es wird getrennt und verschlüsselt auf diesem Gerät gespeichert und ist nicht Ihr Hetzner-Cloud-Token.</string><string name="storage_boxes_connection_name">Verbindungsname</string><string name="storage_boxes_name_error">Geben Sie einen Verbindungsnamen ein</string><string name="storage_boxes_token">Storage-Box-API-Token</string><string name="storage_boxes_token_error">Geben Sie das Storage-Box-API-Token ein</string><string name="storage_boxes_connect">Storage Box verbinden</string><string name="storage_boxes_unnamed">Unbenannte Storage Box</string><string name="storage_boxes_status_unknown">Status nicht verfügbar</string><string name="storage_boxes_usage">Daten: %1$d von %2$d API-Bytes</string><string name="storage_boxes_back">Zurück</string><string name="storage_boxes_status">Status</string><string name="storage_boxes_stats">Speicherstatistik</string><string name="storage_boxes_total">Gesamt: %1$d API-Bytes</string><string name="storage_boxes_data">Daten: %1$d API-Bytes</string><string name="storage_boxes_snapshots">Snapshots: %1$d API-Bytes</string><string name="storage_boxes_stats_unavailable">Speicherstatistik ist in dieser Antwort nicht verfügbar.</string><string name="storage_boxes_folders_unavailable">Die Ordneransicht ist für diese Storage-Box-Verbindung nicht verfügbar.</string>
     <string name="tariffs_title">Tarife &amp; Schätzung</string><string name="tariffs_disclaimer">Dies ist der offizielle Hetzner-Cloud-Preiskatalog, keine Rechnung, aktuelle Nutzung, fälliger Betrag oder garantierte Prognose. Rabatte, Guthaben, Steuern außerhalb der API-Werte und andere nutzungsbasierte Kosten sind ausgeschlossen.</string><string name="tariffs_usage_link">Nutzung &amp; Warnungen in Console</string><string name="tariffs_invoices_link">Rechnungen in Accounts</string><string name="tariffs_error_title">Tarife konnten nicht geladen werden</string><string name="tariffs_error_message">Prüfen Sie die Cloud-Verbindung und versuchen Sie es erneut.</string><string name="tariffs_retry">Erneut versuchen</string><string name="tariffs_loading">Offizieller Preiskatalog wird geladen…</string><string name="tariffs_incomplete_title">Preiskatalog unvollständig</string><string name="tariffs_incomplete_message">Für einige Servertyp-Standort-Zuordnungen fehlt ein Preis, daher wird keine Schätzung angezeigt.</string><string name="tariffs_currency_vat">Währung: %1$s · MwSt. aus API: %2$s</string><string name="tariffs_rate">%1$s · %2$s %3$s/Stunde · %4$s %5$s/Monat maximal</string>
@@ -441,7 +444,7 @@
     <string name="resize_server_must_be_off">Der Server muss vor der Typänderung ausgeschaltet werden. Er ist nicht ausgeschaltet, daher kann die Änderung nicht fortgesetzt werden.</string>
     <string name="resize_target_type">Neuer Typ</string>
     <string name="resize_choose_type">Typ auswählen</string>
-    <string name="resize_type_summary">%1$s · %2$d vCPU · %3$s GB RAM · %4$d GB Festplatte</string>
+    <string name="resize_type_summary">%1$s · %2$d vCPU · %3$.1f GB RAM · %4$d GB Festplatte</string>
     <string name="resize_price_location">API-Preis für %1$s in %2$s</string>
     <string name="resize_upgrade_disk_label">Festplatte auf die Größe des neuen Typs vergrößern</string>
     <string name="resize_disk_upgrade_acknowledgement">Ich verstehe, dass das Vergrößern der Festplatte irreversibel ist und später nicht rückgängig gemacht werden kann.</string>
@@ -471,6 +474,9 @@
     <string name="settings_profile_id">Konto-ID: %1$d</string>
     <string name="settings_profile_email">E-Mail: %1$s</string>
     <string name="settings_profile_read_only_note">Schreibgeschützte Kontoinformationen für dieses Cloud-Projekt. API-Token werden nie angezeigt.</string>
+    <string name="settings_profile_project_connection">Verbundenes Cloud-Projekt</string>
+    <string name="settings_profile_test_connection">Verbundene Testumgebung</string>
+    <string name="settings_profile_api_scope_note">Hetzner-Cloud-Tokens sind an ein Projekt gebunden. Die öffentliche Cloud-API liefert keinen Kontonamen oder keine E-Mail-Adresse; API-Tokens werden nie angezeigt.</string>
     <string name="volume_detail_title">Volume-Details</string>
     <string name="volume_detail_loading">Volume-Details werden geladen…</string>
     <string name="volume_detail_load_error">Volume-Details konnten nicht geladen werden. Prüfen Sie die Verbindung und versuchen Sie es erneut.</string>
@@ -591,9 +597,16 @@
     <string name="load_balancer_types_price">%1$s · stündlich %2$s · Monatsobergrenze %3$s</string>
     <string name="load_balancer_types_read_only">Schreibgeschützter Katalog. Diese Ansicht kann keinen Load Balancer erstellen, skalieren oder ändern.</string>
     <string name="network_actions_title">Netzwerk-Aktionsverlauf</string><string name="network_actions_empty">Für dieses Netzwerk wurden keine Aktionen zurückgegeben.</string><string name="network_actions_unknown">Unbekannte Aktion</string>
-    <string name="nav_catalog">Katalog</string>
-    <string name="server_catalog_title">Serverkatalog</string>
-    <string name="server_catalog_description">Schreibgeschützte Metadaten zu Servertypen und Standorten. Preise werden genau wie von der Hetzner-Cloud-API zurückgegeben angezeigt.</string>
+    <string name="nav_catalog">Erstellen</string>
+    <string name="server_catalog_title">Server erstellen</string>
+    <string name="server_catalog_description">Starten Sie hier eine geprüfte Serverbestellung oder vergleichen Sie zuerst Typen und Standorte.</string>
+    <string name="server_catalog_configure_server">Server konfigurieren und erstellen</string>
+    <string name="server_catalog_changes_disabled">Änderungen sind auf diesem Gerät deaktiviert. Sie können Preise und Verfügbarkeit vergleichen und Änderungen in den Einstellungen aktivieren, wenn Sie Ressourcen erstellen möchten.</string>
+    <string name="server_catalog_open_settings">Einstellungen öffnen</string>
+    <string name="server_catalog_other_resources">Andere Ressourcen</string>
+    <string name="server_catalog_other_resources_description">Volumes, private Netzwerke, Firewalls und öffentliche IPs haben eigene geprüfte Abläufe.</string>
+    <string name="server_catalog_open_storage">Speicher öffnen</string>
+    <string name="server_catalog_open_network">Netzwerk öffnen</string>
     <string name="server_catalog_loading">Katalog wird geladen…</string>
     <string name="server_catalog_load_failed">Der Serverkatalog konnte nicht geladen werden.</string>
     <string name="server_catalog_types">Servertypen</string>
@@ -809,5 +822,38 @@
     <string name="resource_protection_confirmation_label">Bestätigung</string>
     <string name="resource_protection_confirm">Schutzänderung anwenden</string>
     <string name="resource_protection_failed">Hetzner Cloud konnte den Löschschutz nicht aktualisieren. Die Ressource wurde nicht geändert.</string>
+    <string name="resource_protection_locked">Um den Löschschutz zu ändern, aktivieren Sie folgenreiche Vorgänge in den Einstellungen auf diesem Gerät. Die Ressource wurde nicht geändert.</string>
     <string name="nav_more">Mehr</string>
+    <string name="nav_object_storage">Object Storage</string>
+    <string name="object_storage_title">Object Storage</string>
+    <string name="object_storage_subtitle">S3-Buckets verwenden eigene Projekt-Zugangsdaten.</string>
+    <string name="object_storage_loading">Buckets werden geladen…</string>
+    <string name="object_storage_empty">Keine Buckets in dieser S3-Verbindung.</string>
+    <string name="object_storage_created_unknown">Erstellungsdatum nicht verfügbar</string>
+    <string name="object_storage_connection">S3-Verbindung</string>
+    <string name="object_storage_add_connection">S3-Verbindung hinzufügen</string>
+    <string name="object_storage_remove_connection">Entfernen</string>
+    <string name="object_storage_connect_title">Object Storage verbinden</string>
+    <string name="object_storage_setup_explanation">Erstellen Sie zuerst S3-Zugangsdaten in der Hetzner Console → Projekt → Security → S3 Credentials. Das Secret wird nur einmal angezeigt; es gibt keine API zum Erstellen oder Wiederherstellen.</string>
+    <string name="object_storage_security_note">Verwenden Sie möglichst ein eigenes Projekt und eine einschränkende Bucket Policy. Die App speichert Access- und Secret-Key verschlüsselt auf diesem Gerät und zeigt sie nach dem Speichern nie an.</string>
+    <string name="object_storage_profile_name">Lokaler Profilname</string>
+    <string name="object_storage_location">Endpoint-Standort</string>
+    <string name="object_storage_access_key">S3 Access Key</string>
+    <string name="object_storage_secret_key">S3 Secret Key</string>
+    <string name="object_storage_connect_action">Prüfen und verbinden</string>
+    <string name="object_storage_mutations_disabled">Erstellen und Löschen sind ausgeblendet, bis folgenreiche Vorgänge in Einstellungen aktiviert sind.</string>
+    <string name="object_storage_create_action">Bucket erstellen</string>
+    <string name="object_storage_delete_action">Löschen</string>
+    <string name="object_storage_create_title">Bucket erstellen</string>
+    <string name="object_storage_create_warning">Dies erstellt einen privaten S3-Bucket am gewählten Endpoint. Bucket-Namen sind global eindeutig und können nicht umbenannt werden.</string>
+    <string name="object_storage_create_cost_warning">Das Erstellen des ersten aktiven Buckets kann Object-Storage-Kosten auslösen. Diese API stellt keine Kostenschätzung bereit.</string>
+    <string name="object_storage_bucket_name">Bucket-Name</string>
+    <string name="object_storage_create_confirm">Bucket erstellen</string>
+    <string name="object_storage_delete_title">%1$s löschen?</string>
+    <string name="object_storage_delete_warning">Der Bucket wird nur dauerhaft gelöscht, wenn er leer ist. Die App prüft die Leere unmittelbar vor dem Löschvorgang.</string>
+    <string name="object_storage_delete_protection_warning">Wenn Löschschutz in der Console aktiviert ist, deaktivieren Sie ihn zuerst dort. Die S3-API bietet keinen zuverlässigen Umschalter dafür.</string>
+    <string name="object_storage_delete_type_name">Geben Sie zum Fortfahren den exakten Bucket-Namen „%1$s“ ein.</string>
+    <string name="object_storage_delete_confirm">Bucket dauerhaft löschen</string>
+    <string name="object_storage_bucket_not_empty">Der Bucket ist nicht leer. Entfernen Sie die Objekte zuerst in einem dedizierten S3-Client.</string>
+    <string name="object_storage_request_failed">Object Storage konnte diese Anfrage nicht abschließen. Prüfen Sie Endpoint und S3-Zugangsdaten und versuchen Sie es erneut.</string>
 </resources>

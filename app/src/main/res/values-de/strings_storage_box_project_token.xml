@@ -1,0 +1,10 @@
+<resources>
+    <string name="storage_boxes_project_token">Verwaltung mit dem Hetzner-API-Token dieses Projekts. Es ist kein separates Storage-Box-Token erforderlich.</string>
+    <string name="storage_boxes_load_error_project">Storage Boxes konnten nicht geladen werden. Prüfen Sie das API-Token dieses Projekts und versuchen Sie es erneut.</string>
+    <string name="storage_boxes_legacy_credentials_title">Gespeicherte frühere Zugangsdaten</string>
+    <string name="storage_boxes_legacy_credentials_message">Frühere App-Versionen speicherten separate Storage-Box-Zugangsdaten. Sie werden nicht mehr verwendet oder übertragen. Sie bleiben verschlüsselt auf diesem Gerät, bis Sie sie ausdrücklich entfernen.</string>
+    <string name="storage_boxes_legacy_credentials_remove">Entfernen</string>
+    <string name="storage_boxes_legacy_credentials_forget_title">Gespeicherte Zugangsdaten entfernen?</string>
+    <string name="storage_boxes_legacy_credentials_forget_message">Dadurch werden die ungenutzten verschlüsselten Zugangsdaten dauerhaft von diesem Gerät gelöscht. Sie können nicht wiederhergestellt werden.</string>
+    <string name="storage_boxes_legacy_credentials_forget_confirm">Zugangsdaten entfernen</string>
+</resources>

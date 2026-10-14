@@ -3,8 +3,9 @@ package com.hcloudcontrol
 import android.app.Activity
 import android.os.Bundle
 import android.net.Uri
-import androidx.activity.ComponentActivity
+import android.text.format.Formatter
 import androidx.activity.compose.setContent
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -21,9 +22,11 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -43,7 +46,6 @@ import com.hcloudcontrol.core.domain.model.LoadBalancerInventory
 import com.hcloudcontrol.core.domain.model.PrimaryIpInventory
 import com.hcloudcontrol.core.domain.model.PrivateNetworkInventory
 import com.hcloudcontrol.core.domain.model.CreatePrivateNetworkSpec
-import com.hcloudcontrol.core.domain.model.Profile
 import com.hcloudcontrol.core.domain.model.PlacementGroupInventory
 import com.hcloudcontrol.core.domain.model.Server
 import com.hcloudcontrol.core.domain.model.CloudAction
@@ -57,6 +59,7 @@ import com.hcloudcontrol.core.domain.model.StorageBoxSubaccount
 import com.hcloudcontrol.core.domain.model.CreateStorageBoxSnapshotSpec
 import com.hcloudcontrol.core.domain.model.VolumeInventory
 import com.hcloudcontrol.core.domain.model.LocationOption
+import com.hcloudcontrol.core.domain.model.ServerTypeOption
 import com.hcloudcontrol.core.domain.model.CreateVolumeSpec
 import com.hcloudcontrol.core.domain.model.CreatePrimaryIpSpec
 import com.hcloudcontrol.core.domain.model.HCloudConnectionConfig
@@ -67,7 +70,6 @@ import com.hcloudcontrol.core.domain.repository.ServerMetricsRepository
 import com.hcloudcontrol.core.domain.repository.LoadBalancerMetricsRepository
 import com.hcloudcontrol.core.domain.repository.StorageBoxRepository
 import com.hcloudcontrol.core.domain.usecase.GetServersUseCase
-import com.hcloudcontrol.core.domain.usecase.GetProfileUseCase
 import com.hcloudcontrol.core.domain.usecase.PrimaryIpOperationsUseCase
 import com.hcloudcontrol.core.domain.usecase.FloatingIpOperationsUseCase
 import com.hcloudcontrol.core.domain.usecase.FirewallOperationsUseCase
@@ -78,14 +80,17 @@ import com.hcloudcontrol.core.network.DnsRepositoryFactory
 import com.hcloudcontrol.core.network.ServerMetricsRepositoryFactory
 import com.hcloudcontrol.core.network.LoadBalancerMetricsRepositoryFactory
 import com.hcloudcontrol.core.network.StorageBoxRepositoryFactory
+import com.hcloudcontrol.core.network.ObjectStorageRepositoryFactory
 import com.hcloudcontrol.core.security.CloudProjectConnection
 import com.hcloudcontrol.core.security.EncryptedHCloudTokenStore
 import com.hcloudcontrol.core.security.HCloudTokenStore
-import com.hcloudcontrol.core.security.EncryptedStorageBoxTokenStore
+import com.hcloudcontrol.core.security.EncryptedLegacyStorageBoxCredentialStore
 import com.hcloudcontrol.core.security.PersistentHighImpactOperationsStore
 import com.hcloudcontrol.core.security.HighImpactOperationsCapability
-import com.hcloudcontrol.core.security.StorageBoxConnection
-import com.hcloudcontrol.core.security.StorageBoxTokenStore
+import com.hcloudcontrol.core.security.LegacyStorageBoxCredentialStore
+import com.hcloudcontrol.core.security.EncryptedObjectStorageCredentialStore
+import com.hcloudcontrol.core.security.ObjectStorageCredentialStore
+import com.hcloudcontrol.core.domain.repository.ObjectStorageRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -97,19 +102,30 @@ import java.time.Duration
 import java.time.Instant
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.appcompat.app.AppCompatActivity
 import androidx.core.os.LocaleListCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsControllerCompat
 
-class MainActivity : ComponentActivity() {
+/**
+ * Locale changes made through AppCompatDelegate are delivered to active AppCompat delegates.
+ * Using ComponentActivity here meant the preference could be set, but no active delegate was
+ * available to recreate the screen with the new Resources configuration.  AppCompatActivity
+ * also restores the persisted app locale when the process is launched again.
+ */
+class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val tokenStore = EncryptedHCloudTokenStore(applicationContext)
-        val storageBoxTokenStore = EncryptedStorageBoxTokenStore(applicationContext)
+        val legacyStorageBoxCredentialStore = EncryptedLegacyStorageBoxCredentialStore(applicationContext)
+        val objectStorageCredentialStore = EncryptedObjectStorageCredentialStore(applicationContext)
         val repository = HCloudRepositoryFactory.create(tokenStore::token) {
             tokenStore.requireActiveConnectionConfig()
         }
-        val storageBoxRepository = StorageBoxRepositoryFactory.create(storageBoxTokenStore::token)
+        // Storage Boxes are project resources; their separate API host still uses the active
+        // project's Bearer token. Legacy separate credentials are never reused.
+        val storageBoxRepository = StorageBoxRepositoryFactory.create(tokenStore::token)
+        val objectStorageRepository = ObjectStorageRepositoryFactory.create(objectStorageCredentialStore::activeCredentials)
         val billingRepository = BillingRateCardRepositoryFactory.create(tokenStore::token) {
             tokenStore.requireActiveConnectionConfig()
         }
@@ -132,8 +148,10 @@ class MainActivity : ComponentActivity() {
             HCloudControlApp(
                 tokenStore = tokenStore,
                 repository = repository,
-                storageBoxTokenStore = storageBoxTokenStore,
+                legacyStorageBoxCredentialStore = legacyStorageBoxCredentialStore,
                 storageBoxRepository = storageBoxRepository,
+                objectStorageCredentialStore = objectStorageCredentialStore,
+                objectStorageRepository = objectStorageRepository,
                 billingRepository = billingRepository,
                 serverMetricsRepository = serverMetricsRepository,
                 loadBalancerMetricsRepository = loadBalancerMetricsRepository,
@@ -241,6 +259,9 @@ private enum class LanguageMode(val labelRes: Int, val tags: String?) {
     GERMAN(R.string.language_german, "de"),
 }
 
+/** A one-shot, non-secret acknowledgement that survives the onboarding-to-home transition. */
+private enum class ConnectionNotice { TestServerConnected, CloudProjectConnected }
+
 private fun applyLanguage(mode: LanguageMode) {
     AppCompatDelegate.setApplicationLocales(
         mode.tags?.let(LocaleListCompat::forLanguageTags) ?: LocaleListCompat.getEmptyLocaleList(),
@@ -276,8 +297,10 @@ internal val LocalHighImpactOperations = staticCompositionLocalOf { HighImpactOp
 private fun HCloudControlApp(
     tokenStore: HCloudTokenStore,
     repository: HCloudRepository,
-    storageBoxTokenStore: StorageBoxTokenStore,
+    legacyStorageBoxCredentialStore: LegacyStorageBoxCredentialStore,
     storageBoxRepository: StorageBoxRepository,
+    objectStorageCredentialStore: ObjectStorageCredentialStore,
+    objectStorageRepository: ObjectStorageRepository,
     billingRepository: BillingRateCardRepository,
     serverMetricsRepository: ServerMetricsRepository,
     loadBalancerMetricsRepository: LoadBalancerMetricsRepository,
@@ -310,7 +333,11 @@ private fun HCloudControlApp(
         }
     }
     MaterialTheme(colorScheme = colorScheme, typography = HCloudTypography, shapes = HCloudShapes) {
-        CompositionLocalProvider(LocalHighImpactOperations provides highImpactOperations) {
+        val scrollPositionRegistry = rememberScrollPositionRegistry()
+        CompositionLocalProvider(
+            LocalHighImpactOperations provides highImpactOperations,
+            LocalScrollPositionRegistry provides scrollPositionRegistry,
+        ) {
             Surface(
             modifier = Modifier.fillMaxSize(),
             color = colorScheme.background,
@@ -318,21 +345,34 @@ private fun HCloudControlApp(
         ) {
             var connections by remember { mutableStateOf(tokenStore.connections()) }
             var addingProject by remember { mutableStateOf(false) }
+            var connectionNotice by remember { mutableStateOf<ConnectionNotice?>(null) }
+            // A secondary-project form is a child of the home screen, not a new task root.
+            // Consume the system gesture before Activity finishes.
+            BackHandler(enabled = addingProject) { addingProject = false }
             if (connections.isEmpty() || addingProject) {
                 Onboarding(
                     isAdditionalProject = connections.isNotEmpty(),
                     onConnect = { projectName, token, config ->
-                        tokenStore.saveConnection(projectName, token, config)
-                        connections = tokenStore.connections()
-                        addingProject = false
+                        runCatching {
+                            tokenStore.saveConnection(projectName, token, config)
+                            connections = tokenStore.connections()
+                            addingProject = false
+                        }.onSuccess {
+                            connectionNotice = if (config.kind == ConnectionKind.TEST_MOCK) {
+                                ConnectionNotice.TestServerConnected
+                            } else {
+                                ConnectionNotice.CloudProjectConnected
+                            }
+                        }
                     },
                 )
             } else CloudHome(
                 getServers = GetServersUseCase(repository),
-                getProfile = GetProfileUseCase(repository),
                 repository = repository,
-                storageBoxTokenStore = storageBoxTokenStore,
+                legacyStorageBoxCredentialStore = legacyStorageBoxCredentialStore,
                 storageBoxRepository = storageBoxRepository,
+                objectStorageCredentialStore = objectStorageCredentialStore,
+                objectStorageRepository = objectStorageRepository,
                 billingRepository = billingRepository,
                 serverMetricsRepository = serverMetricsRepository,
                 loadBalancerMetricsRepository = loadBalancerMetricsRepository,
@@ -344,6 +384,8 @@ private fun HCloudControlApp(
                 appearanceMode = appearanceMode,
                 onAppearanceModeChange = onAppearanceModeChange,
                 onHighImpactOperationsChange = onHighImpactOperationsChange,
+                connectionNotice = connectionNotice,
+                onConnectionNoticeShown = { connectionNotice = null },
             )
             }
         }
@@ -353,7 +395,7 @@ private fun HCloudControlApp(
 @Composable
 private fun Onboarding(
     isAdditionalProject: Boolean,
-    onConnect: (String, String, HCloudConnectionConfig) -> Unit,
+    onConnect: (String, String, HCloudConnectionConfig) -> Result<Unit>,
 ) {
     var projectName by remember { mutableStateOf("") }
     var connectionKind by remember { mutableStateOf(ConnectionKind.REAL) }
@@ -362,11 +404,31 @@ private fun Onboarding(
     var realTokenVisible by remember { mutableStateOf(false) }
     var testTokenVisible by remember { mutableStateOf(false) }
     var submitted by remember { mutableStateOf(false) }
+    var connectionError by remember { mutableStateOf(false) }
+    val focusManager = LocalFocusManager.current
     val isTestServer = connectionKind == ConnectionKind.TEST_MOCK
     val token = if (isTestServer) testServerToken else realToken
     val testProfileName = stringResource(R.string.onboarding_test_profile_name)
     val invalidName = submitted && !isTestServer && projectName.isBlank()
     val invalidToken = submitted && token.isBlank()
+    val submitConnection = {
+        // Do not rely on Material Button's internal gesture node here. On a physical
+        // device this CTA lives inside a scrolling card below a password field; a
+        // plain clickable surface keeps touch, keyboard and accessibility activation
+        // on the same explicit callback.
+        focusManager.clearFocus(force = true)
+        submitted = true
+        connectionError = false
+        onboardingConnectionRequest(
+            connectionKind = connectionKind,
+            projectName = projectName,
+            testProfileName = testProfileName,
+            token = token,
+        )?.let { request ->
+            connectionError = onConnect(request.displayName, request.token, request.config).isFailure
+        }
+        Unit
+    }
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 32.dp),
         verticalArrangement = Arrangement.spacedBy(0.dp),
@@ -439,16 +501,36 @@ private fun Onboarding(
             colors = onboardingTextFieldColors(),
         )
         Spacer(Modifier.height(20.dp))
-        Button(onClick = {
-            submitted = true
-            if ((!isTestServer || projectName.isNotBlank()) && token.isNotBlank()) {
-                onConnect(
-                    if (isTestServer) testProfileName else projectName,
-                    token,
-                    if (isTestServer) HCloudConnectionConfig.testMock() else HCloudConnectionConfig.real(),
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 56.dp)
+                .clickable(role = Role.Button, onClick = submitConnection),
+            shape = MaterialTheme.shapes.medium,
+            color = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary,
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Text(
+                    stringResource(if (isTestServer) R.string.onboarding_open_test_server else R.string.onboarding_connect_securely),
+                    style = MaterialTheme.typography.labelLarge,
                 )
             }
-        }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary)) { Text(stringResource(if (isTestServer) R.string.onboarding_open_test_server else R.string.onboarding_connect_securely)) }
+        }
+        if (submitted && (invalidName || invalidToken || connectionError)) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                stringResource(
+                    when {
+                        invalidName -> R.string.onboarding_project_name_error
+                        invalidToken -> if (isTestServer) R.string.onboarding_test_token_error else R.string.onboarding_token_error
+                        else -> R.string.onboarding_save_error
+                    },
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
         Spacer(Modifier.height(14.dp))
         Text(stringResource(R.string.onboarding_scope_note), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
@@ -479,12 +561,6 @@ private sealed interface ServersState {
 }
 
 /** Read-only account metadata returned for the currently selected Cloud project. */
-private sealed interface CloudProfileState {
-    data object Loading : CloudProfileState
-    data class Content(val profile: Profile) : CloudProfileState
-    data class Error(val message: String) : CloudProfileState
-}
-
 private sealed interface BackupSnapshotState {
     data object Loading : BackupSnapshotState
     data class Content(val images: List<BackupSnapshotImage>, val volumes: List<VolumeInventory>, val servers: List<Server>) : BackupSnapshotState
@@ -515,7 +591,23 @@ private sealed interface PrimaryIpDetailState {
     data class Error(val message: String) : PrimaryIpDetailState
 }
 private data class NetworkInventoryResult(val ips: List<PrimaryIpInventory>, val floatingIps: List<FloatingIpInventory>, val servers: List<Server>, val firewalls: List<FirewallInventory>, val networks: List<PrivateNetworkInventory>, val loadBalancers: List<LoadBalancerInventory>, val placementGroups: List<PlacementGroupInventory>)
-private enum class Destination(val labelRes: Int, val marker: String) { Servers(R.string.nav_servers, "▣"), Catalog(R.string.nav_catalog, "⌕"), Storage(R.string.nav_storage, "▤"), Images(R.string.nav_images, "▧"), StorageBoxes(R.string.nav_storage_boxes, "▦"), Tariffs(R.string.nav_tariffs, "¤"), LoadBalancers(R.string.nav_load_balancers, "⇄"), Certificates(R.string.nav_certificates, "◇"), SshKeys(R.string.nav_ssh_keys, "⌘"), Network(R.string.nav_network, "⌁"), PlacementGroups(R.string.nav_placement_groups, "⊞"), Dns(R.string.nav_dns, "≋"), Settings(R.string.nav_settings, "⚙") }
+internal enum class Destination(val labelRes: Int, val marker: String) { Servers(R.string.nav_servers, "▣"), Catalog(R.string.nav_catalog, "⌕"), Storage(R.string.nav_storage, "▤"), Images(R.string.nav_images, "▧"), StorageBoxes(R.string.nav_storage_boxes, "▦"), ObjectStorage(R.string.nav_object_storage, "◉"), Tariffs(R.string.nav_tariffs, "¤"), LoadBalancers(R.string.nav_load_balancers, "⇄"), Certificates(R.string.nav_certificates, "◇"), SshKeys(R.string.nav_ssh_keys, "⌘"), Network(R.string.nav_network, "⌁"), PlacementGroups(R.string.nav_placement_groups, "⊞"), Dns(R.string.nav_dns, "≋"), Settings(R.string.nav_settings, "⚙") }
+
+/** The deterministic root-level back priority, kept pure so it cannot regress unnoticed. */
+internal enum class HomeBackAction { CloseMore, CancelServerCreate, CloseServerDetail, LeavePrimaryDestination, LetSystemHandle }
+
+internal fun resolveHomeBack(
+    showMoreDestinations: Boolean,
+    showCreateServer: Boolean,
+    selectedServer: Server?,
+    destination: Destination,
+): HomeBackAction = when {
+    showMoreDestinations -> HomeBackAction.CloseMore
+    showCreateServer -> HomeBackAction.CancelServerCreate
+    selectedServer != null -> HomeBackAction.CloseServerDetail
+    destination != Destination.Servers -> HomeBackAction.LeavePrimaryDestination
+    else -> HomeBackAction.LetSystemHandle
+}
 
 /**
  * A bottom bar is intentionally limited to four destinations plus an overflow affordance.
@@ -533,10 +625,11 @@ private val overflowDestinations = Destination.entries.filterNot { it in primary
 @Composable
 private fun CloudHome(
     getServers: GetServersUseCase,
-    getProfile: GetProfileUseCase,
     repository: HCloudRepository,
-    storageBoxTokenStore: StorageBoxTokenStore,
+    legacyStorageBoxCredentialStore: LegacyStorageBoxCredentialStore,
     storageBoxRepository: StorageBoxRepository,
+    objectStorageCredentialStore: ObjectStorageCredentialStore,
+    objectStorageRepository: ObjectStorageRepository,
     billingRepository: BillingRateCardRepository,
     serverMetricsRepository: ServerMetricsRepository,
     loadBalancerMetricsRepository: LoadBalancerMetricsRepository,
@@ -548,26 +641,78 @@ private fun CloudHome(
     appearanceMode: AppearanceMode,
     onAppearanceModeChange: (AppearanceMode) -> Unit,
     onHighImpactOperationsChange: (Boolean) -> Unit,
+    connectionNotice: ConnectionNotice?,
+    onConnectionNoticeShown: () -> Unit,
 ) {
     val activeId = tokenStore.activeConnectionId()
     val activeProject = connections.firstOrNull { it.id == activeId } ?: connections.first()
     var destination by remember { mutableStateOf(Destination.Servers) }
     var serverState by remember(activeProject.id) { mutableStateOf<ServersState>(ServersState.Loading) }
     var serverLoadGeneration by remember(activeProject.id) { mutableStateOf(0L) }
+    var serverRefreshInProgress by remember(activeProject.id) { mutableStateOf(false) }
     var selectedServer by remember(activeProject.id) { mutableStateOf<Server?>(null) }
     var showCreateServer by remember(activeProject.id) { mutableStateOf(false) }
+    var createServerTypePrefill by remember(activeProject.id) { mutableStateOf<ServerTypeOption?>(null) }
+    var createServerLocationPrefill by remember(activeProject.id) { mutableStateOf<LocationOption?>(null) }
+    // Links from the create catalog are children of that workflow.  Remember their parent
+    // so the system gesture returns there instead of unexpectedly jumping to Servers.
+    var primaryBackDestination by remember { mutableStateOf<Destination?>(null) }
     var showMoreDestinations by remember { mutableStateOf(false) }
+    /*
+     * This is the root of the in-app back stack.  Compose screens below it may add a
+     * more specific BackHandler (dialogs do this through their dismiss callbacks).
+     * At this level the order is deliberately: transient UI -> detail -> primary tab
+     * -> let Android finish the activity.
+     */
+    BackHandler(enabled = resolveHomeBack(showMoreDestinations, showCreateServer, selectedServer, destination) != HomeBackAction.LetSystemHandle) {
+        when (resolveHomeBack(showMoreDestinations, showCreateServer, selectedServer, destination)) {
+            HomeBackAction.CloseMore -> showMoreDestinations = false
+            HomeBackAction.CancelServerCreate -> showCreateServer = false
+            HomeBackAction.CloseServerDetail -> selectedServer = null
+            HomeBackAction.LeavePrimaryDestination -> {
+                destination = primaryBackDestination ?: Destination.Servers
+                primaryBackDestination = null
+            }
+            HomeBackAction.LetSystemHandle -> Unit
+        }
+    }
     val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val connectionNoticeText = connectionNotice?.let {
+        stringResource(
+            if (it == ConnectionNotice.TestServerConnected) {
+                R.string.onboarding_test_server_connected
+            } else {
+                R.string.onboarding_project_connected
+            },
+        )
+    }
+    LaunchedEffect(connectionNoticeText) {
+        connectionNoticeText?.let { message ->
+            onConnectionNoticeShown()
+            snackbarHostState.showSnackbar(message)
+        }
+    }
     fun refresh() {
+        // Pull-to-refresh, retries and a completed mutation can arrive nearly at
+        // once.  One authoritative request is enough; starting several used to
+        // let an older result overwrite the newer inventory state.
+        if (serverRefreshInProgress) return
+        serverRefreshInProgress = true
         val generation = ++serverLoadGeneration
-        serverState = ServersState.Loading
+        // Keep a populated inventory visible under the pull indicator.  The
+        // first load still uses the dedicated loading state.
+        if (serverState !is ServersState.Content) serverState = ServersState.Loading
         scope.launch {
             val result = try { ServersState.Content(withContext(Dispatchers.IO) { getServers() }) }
             catch (_: IOException) { ServersState.Offline }
             catch (error: Throwable) {
                 ServersState.Error(safeApiFailureMessage(error, "Could not load servers"))
             }
-            if (generation == serverLoadGeneration) serverState = result
+            if (generation == serverLoadGeneration) {
+                serverState = result
+                serverRefreshInProgress = false
+            }
         }
     }
     LaunchedEffect(activeProject.id) { refresh() }
@@ -575,14 +720,27 @@ private fun CloudHome(
         ServerProvisioningScreen(
             repository = repository,
             isTestServer = activeProject.config.kind == ConnectionKind.TEST_MOCK,
-            onCancel = { showCreateServer = false },
-            onCreated = { showCreateServer = false; refresh() },
+            initialServerType = createServerTypePrefill,
+            initialLocation = createServerLocationPrefill,
+            onCancel = {
+                showCreateServer = false
+                createServerTypePrefill = null
+                createServerLocationPrefill = null
+            },
+            onCreated = {
+                showCreateServer = false
+                createServerTypePrefill = null
+                createServerLocationPrefill = null
+                refresh()
+            },
         )
         return
     }
+    CompositionLocalProvider(LocalScrollProjectNamespace provides activeProject.id) {
             Scaffold(
                 containerColor = MaterialTheme.colorScheme.background,
                 contentColor = MaterialTheme.colorScheme.onBackground,
+                snackbarHost = { SnackbarHost(snackbarHostState) },
                 topBar = { HCloudTopBar(selectedServer, activeProject, connections, onSelectProject = { connection ->
                     if (connection.id != activeProject.id) {
                         tokenStore.selectConnection(connection.id)
@@ -591,7 +749,11 @@ private fun CloudHome(
                 }, onBack = { selectedServer = null }) },
                 floatingActionButton = {
                     if (selectedServer == null && destination == Destination.Servers && LocalHighImpactOperations.current.isAllowed) {
-                        ExtendedFloatingActionButton(onClick = { showCreateServer = true }) { Text(stringResource(R.string.create_server)) }
+                        ExtendedFloatingActionButton(onClick = {
+                            createServerTypePrefill = null
+                            createServerLocationPrefill = null
+                            showCreateServer = true
+                        }) { Text(stringResource(R.string.create_server)) }
                     }
                 },
                 bottomBar = {
@@ -602,7 +764,7 @@ private fun CloudHome(
                         primaryDestinations.forEach { item ->
                             NavigationBarItem(
                                 selected = item == destination,
-                                onClick = { destination = item },
+                                onClick = { primaryBackDestination = null; destination = item },
                                 icon = { Text(item.marker) },
                                 label = { Text(stringResource(item.labelRes)) },
                                 colors = NavigationBarItemDefaults.colors(
@@ -643,18 +805,38 @@ private fun CloudHome(
                             refresh()
                         }
                     },
+                    onDeleted = {
+                        selectedServer = null
+                        refresh()
+                    },
                     onBack = { selectedServer = null },
                 )
             } ?: when (destination) {
-                Destination.Servers -> ServersScreen(serverState, ::refresh) { selectedServer = it }
-                Destination.Catalog -> ServerCatalogScreen(repository = repository, projectId = activeProject.id)
+                Destination.Servers -> ServersScreen(serverState, serverRefreshInProgress, ::refresh) { selectedServer = it }
+                Destination.Catalog -> ServerCatalogScreen(
+                    repository = repository,
+                    projectId = activeProject.id,
+                    onConfigureServer = { type, location ->
+                        createServerTypePrefill = type
+                        createServerLocationPrefill = location
+                        showCreateServer = true
+                    },
+                    onOpenStorage = { primaryBackDestination = Destination.Catalog; destination = Destination.Storage },
+                    onOpenNetwork = { primaryBackDestination = Destination.Catalog; destination = Destination.Network },
+                    onOpenSettings = { primaryBackDestination = Destination.Catalog; destination = Destination.Settings },
+                )
                 Destination.Storage -> StorageInventoryScreen(
                     repository = repository,
                     projectId = activeProject.id,
                     operationsAllowed = LocalHighImpactOperations.current.isAllowed,
                 )
                 Destination.Images -> CloudImagesScreen(repository = repository, projectId = activeProject.id)
-                Destination.StorageBoxes -> StorageBoxesScreen(tokenStore = storageBoxTokenStore, repository = storageBoxRepository)
+                Destination.StorageBoxes -> StorageBoxesScreen(
+                    project = activeProject,
+                    legacyCredentialStore = legacyStorageBoxCredentialStore,
+                    repository = storageBoxRepository,
+                )
+                Destination.ObjectStorage -> ObjectStorageScreen(store = objectStorageCredentialStore, repository = objectStorageRepository)
                 Destination.Tariffs -> TariffsEstimateScreen(repository = billingRepository, projectId = activeProject.id)
                 Destination.LoadBalancers -> LoadBalancersScreen(repository = repository, metricsRepository = loadBalancerMetricsRepository, projectId = activeProject.id)
                 Destination.Certificates -> CertificatesScreen(repository = repository, projectId = activeProject.id)
@@ -665,7 +847,6 @@ private fun CloudHome(
                 Destination.Settings -> SettingsScreen(
                     activeProject = activeProject,
                     connections = connections,
-                    getProfile = getProfile,
                     onAddProject = onAddProject,
                     onDisconnect = {
                         tokenStore.removeConnection(activeProject.id)
@@ -695,6 +876,7 @@ private fun CloudHome(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable {
+                                primaryBackDestination = null
                                 destination = item
                                 showMoreDestinations = false
                             },
@@ -702,6 +884,7 @@ private fun CloudHome(
                 }
             }
         }
+    }
     }
     }
 }
@@ -765,17 +948,98 @@ private fun HCloudScreenHeader(
 }
 
 @Composable
-private fun ServersScreen(state: ServersState, onRefresh: () -> Unit, onServerClick: (Server) -> Unit) = when (state) {
-    ServersState.Loading -> LoadingView(stringResource(R.string.servers_loading))
-    ServersState.Offline -> StateView(stringResource(R.string.servers_offline_title), stringResource(R.string.servers_offline_message), stringResource(R.string.common_retry), onRefresh)
-    ServersState.ReadOnly -> StateView(stringResource(R.string.servers_read_only_title), stringResource(R.string.servers_read_only_message), stringResource(R.string.common_retry), onRefresh)
-    is ServersState.Error -> StateView(stringResource(R.string.servers_load_failed), state.message, stringResource(R.string.servers_try_again), onRefresh)
-    is ServersState.Content -> if (state.servers.isEmpty()) StateView(stringResource(R.string.servers_empty_title), stringResource(R.string.servers_empty_message), stringResource(R.string.common_retry), onRefresh) else LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item { HCloudScreenHeader(stringResource(R.string.servers_title), stringResource(R.string.servers_count, state.servers.size)) }
-        items(
-            state.servers.sortedWith(compareBy<Server> { it.name.lowercase() }.thenBy { it.id }),
-            key = { it.id },
-        ) { ServerCard(it) { onServerClick(it) } }
+private fun ServersScreen(
+    state: ServersState,
+    isRefreshing: Boolean,
+    onRefresh: () -> Unit,
+    onServerClick: (Server) -> Unit,
+) = HCloudPullToRefresh(
+        isRefreshing = isRefreshing,
+        onRefresh = onRefresh,
+        modifier = Modifier.fillMaxSize(),
+    ) {
+        when (state) {
+            // A scrollable child is intentional even for the non-list states.  Besides
+            // making the gesture discoverable there, it gives PullToRefreshBox a nested
+            // scroll participant; a static Column can consume neither the overscroll nor
+            // the pull gesture on some devices.
+            ServersState.Loading -> ServersRefreshStateView(
+                title = stringResource(R.string.servers_loading),
+                message = null,
+                action = null,
+                onAction = onRefresh,
+                loading = true,
+            )
+            ServersState.Offline -> ServersRefreshStateView(
+                stringResource(R.string.servers_offline_title),
+                stringResource(R.string.servers_offline_message),
+                stringResource(R.string.common_retry),
+                onRefresh,
+            )
+            ServersState.ReadOnly -> ServersRefreshStateView(
+                stringResource(R.string.servers_read_only_title),
+                stringResource(R.string.servers_read_only_message),
+                stringResource(R.string.common_retry),
+                onRefresh,
+            )
+            is ServersState.Error -> ServersRefreshStateView(
+                stringResource(R.string.servers_load_failed),
+                state.message,
+                stringResource(R.string.servers_try_again),
+                onRefresh,
+            )
+            is ServersState.Content -> if (state.servers.isEmpty()) {
+                ServersRefreshStateView(
+                    stringResource(R.string.servers_empty_title),
+                    stringResource(R.string.servers_empty_message),
+                    stringResource(R.string.common_retry),
+                    onRefresh,
+                )
+            } else LazyColumn(
+            state = rememberRestorableLazyListState("servers"),
+            contentPadding = PaddingValues(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            item { HCloudScreenHeader(stringResource(R.string.servers_title), stringResource(R.string.servers_count, state.servers.size)) }
+            items(
+                state.servers.sortedWith(compareBy<Server> { it.name.lowercase() }.thenBy { it.id }),
+                key = { it.id },
+            ) { ServerCard(it) { onServerClick(it) } }
+        }
+    }
+}
+
+@Composable
+private fun ServersRefreshStateView(
+    title: String,
+    message: String?,
+    action: String?,
+    onAction: () -> Unit,
+    loading: Boolean = false,
+) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(32.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        item {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                if (loading) {
+                    CircularProgressIndicator()
+                    Spacer(Modifier.height(16.dp))
+                }
+                Text(title, style = if (loading) MaterialTheme.typography.bodyLarge else MaterialTheme.typography.headlineSmall)
+                message?.let {
+                    Spacer(Modifier.height(8.dp))
+                    Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                action?.let {
+                    Spacer(Modifier.height(20.dp))
+                    OutlinedButton(onClick = onAction) { Text(it) }
+                }
+            }
+        }
     }
 }
 
@@ -799,6 +1063,7 @@ private fun ServerDetails(
     repository: HCloudRepository,
     serverMetricsRepository: ServerMetricsRepository,
     onActionCompleted: () -> Unit,
+    onDeleted: () -> Unit,
     onBack: () -> Unit,
 ) {
     val highImpactAllowed = LocalHighImpactOperations.current.isAllowed
@@ -810,6 +1075,8 @@ private fun ServerDetails(
     var observabilityRefreshKey by remember(server.id) { mutableStateOf(0) }
     var actionHistoryState by remember(server.id) { mutableStateOf<ServerActionHistoryState>(ServerActionHistoryState.Loading) }
     var metricsState by remember(server.id) { mutableStateOf<ServerMetricsState>(ServerMetricsState.Loading) }
+    BackHandler(enabled = showResize) { showResize = false }
+    BackHandler(enabled = !showResize) { onBack() }
     val historyLoadError = stringResource(R.string.server_action_history_load_error)
     val metricsLoadError = stringResource(R.string.server_metrics_load_error)
     LaunchedEffect(server.id, observabilityRefreshKey) {
@@ -848,7 +1115,7 @@ private fun ServerDetails(
         item { ServerObservabilitySection(actionHistoryState, metricsState, onRetry = { observabilityRefreshKey++ }) }
         if (highImpactAllowed) {
             item { ServerManagementSection(server = server, repository = repository, readOnly = readOnly, onCompleted = onActionCompleted) }
-            item { ServerDestructiveOperationsSection(server = server, repository = repository, readOnly = readOnly, onDeleted = onBack, onCompleted = onActionCompleted) }
+            item { ServerDestructiveOperationsSection(server = server, repository = repository, readOnly = readOnly, onDeleted = onDeleted, onCompleted = onActionCompleted) }
             item { ServerIsoSection(server = server, repository = repository, readOnly = readOnly, onActionCompleted = onActionCompleted) }
             item { OutlinedButton(onClick = { showResize = true }, enabled = !readOnly && server.status == ServerStatus.OFF, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.server_change_type)) } }
             item { if (server.status != ServerStatus.OFF) Text(stringResource(R.string.server_power_off_before_resize), color = MaterialTheme.colorScheme.onSurfaceVariant) }
@@ -1230,19 +1497,21 @@ private fun powerActionStatusText(status: String): String = when (status.lowerca
 }
 
 @Composable
-private fun StorageBoxesScreen(tokenStore: StorageBoxTokenStore, repository: StorageBoxRepository) {
-    var connections by remember { mutableStateOf(tokenStore.connections()) }
-    var showConnect by remember { mutableStateOf(false) }
-    val activeConnection = connections.firstOrNull { it.id == tokenStore.activeConnectionId() }
-        ?: connections.firstOrNull()
-    // A Storage Box id is scoped to its own credentials; never retain a detail screen across accounts.
-    var selectedBox by remember(activeConnection?.id) { mutableStateOf<StorageBox?>(null) }
-    var state by remember(activeConnection?.id) { mutableStateOf<StorageBoxesState>(StorageBoxesState.Loading) }
-    var refreshKey by remember(activeConnection?.id) { mutableStateOf(0) }
+private fun StorageBoxesScreen(
+    project: CloudProjectConnection,
+    legacyCredentialStore: LegacyStorageBoxCredentialStore,
+    repository: StorageBoxRepository,
+) {
+    var legacyCredentials by remember { mutableStateOf(legacyCredentialStore.credentials()) }
+    var credentialToForget by remember { mutableStateOf<String?>(null) }
+    // Storage Box ids are scoped to the active Hetzner Console project.
+    var selectedBox by remember(project.id) { mutableStateOf<StorageBox?>(null) }
+    var state by remember(project.id) { mutableStateOf<StorageBoxesState>(StorageBoxesState.Loading) }
+    var refreshKey by remember(project.id) { mutableStateOf(0) }
+    BackHandler(enabled = selectedBox != null) { selectedBox = null }
     val scope = rememberCoroutineScope()
-    val loadError = stringResource(R.string.storage_boxes_load_error)
+    val loadError = stringResource(R.string.storage_boxes_load_error_project)
     fun load() {
-        if (activeConnection == null) return
         state = StorageBoxesState.Loading
         scope.launch {
             state = try {
@@ -1252,19 +1521,8 @@ private fun StorageBoxesScreen(tokenStore: StorageBoxTokenStore, repository: Sto
             }
         }
     }
-    LaunchedEffect(activeConnection?.id, refreshKey) { if (activeConnection != null) load() }
+    LaunchedEffect(project.id, refreshKey) { load() }
 
-    if (showConnect || activeConnection == null) {
-        StorageBoxConnectionScreen(
-            onCancel = { showConnect = false },
-            onConnect = { name, token ->
-                tokenStore.saveConnection(name, token)
-                connections = tokenStore.connections()
-                showConnect = false
-            },
-        )
-        return
-    }
     selectedBox?.let { box ->
         StorageBoxDetailScreen(box = box, repository = repository, onBack = { selectedBox = null })
         return
@@ -1273,26 +1531,26 @@ private fun StorageBoxesScreen(tokenStore: StorageBoxTokenStore, repository: Sto
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Column {
                 Text(stringResource(R.string.storage_boxes_title), style = MaterialTheme.typography.headlineMedium)
-                Text(activeConnection.displayName, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(project.displayName, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            TextButton(onClick = { showConnect = true }) { Text(stringResource(R.string.storage_boxes_add_connection)) }
         }
-        if (connections.size > 1) {
-            var expanded by remember { mutableStateOf(false) }
-            Box {
-                OutlinedButton(onClick = { expanded = true }) { Text("${activeConnection.displayName} ▾") }
-                DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                    connections.forEach { connection ->
-                        DropdownMenuItem(text = { Text(connection.displayName) }, onClick = {
-                            tokenStore.selectConnection(connection.id)
-                            connections = tokenStore.connections()
-                            expanded = false
-                        })
+        Text(stringResource(R.string.storage_boxes_project_token), color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (legacyCredentials.isNotEmpty()) {
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(stringResource(R.string.storage_boxes_legacy_credentials_title), style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.storage_boxes_legacy_credentials_message), color = MaterialTheme.colorScheme.onSecondaryContainer)
+                    legacyCredentials.forEach { credential ->
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Text(credential.displayName, modifier = Modifier.weight(1f))
+                            TextButton(onClick = { credentialToForget = credential.id }) {
+                                Text(stringResource(R.string.storage_boxes_legacy_credentials_remove))
+                            }
+                        }
                     }
                 }
             }
         }
-        Text(stringResource(R.string.storage_boxes_separate_credentials), color = MaterialTheme.colorScheme.onSurfaceVariant)
         when (val current = state) {
             StorageBoxesState.Loading -> LoadingView(stringResource(R.string.storage_boxes_loading))
             is StorageBoxesState.Error -> StateView(
@@ -1303,46 +1561,54 @@ private fun StorageBoxesScreen(tokenStore: StorageBoxTokenStore, repository: Sto
                 StateView(stringResource(R.string.storage_boxes_empty_title), stringResource(R.string.storage_boxes_empty_message), stringResource(R.string.storage_boxes_retry), { refreshKey++ })
             } else {
                 Text(stringResource(R.string.storage_boxes_pagination_note), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                HCloudPullToRefresh(isRefreshing = false, onRefresh = { refreshKey++ }, modifier = Modifier.weight(1f)) {
+                LazyColumn(state = rememberRestorableLazyListState("storage-boxes:${project.id}"), modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(current.boxes.sortedBy { it.name.orEmpty().lowercase() }, key = { it.id }) { box ->
                         StorageBoxCard(box) { selectedBox = box }
                     }
                 }
+                }
             }
         }
     }
-}
-
-@Composable
-private fun StorageBoxConnectionScreen(onCancel: () -> Unit, onConnect: (String, String) -> Unit) {
-    var name by remember { mutableStateOf("") }
-    var token by remember { mutableStateOf("") }
-    var visible by remember { mutableStateOf(false) }
-    var submitted by remember { mutableStateOf(false) }
-    val invalidName = submitted && name.isBlank()
-    val invalidToken = submitted && token.isBlank()
-    Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center) {
-        Text(stringResource(R.string.storage_boxes_connect_title), style = MaterialTheme.typography.headlineMedium)
-        Spacer(Modifier.height(12.dp))
-        Text(stringResource(R.string.storage_boxes_connect_explanation), color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.height(20.dp))
-        OutlinedTextField(name, { name = it }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.storage_boxes_connection_name)) }, isError = invalidName, supportingText = { if (invalidName) Text(stringResource(R.string.storage_boxes_name_error)) }, singleLine = true)
-        Spacer(Modifier.height(12.dp))
-        OutlinedTextField(token, { token = it }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.storage_boxes_token)) }, isError = invalidToken, supportingText = { if (invalidToken) Text(stringResource(R.string.storage_boxes_token_error)) }, singleLine = true, visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(), trailingIcon = { TextButton(onClick = { visible = !visible }) { Text(stringResource(if (visible) R.string.common_hide else R.string.common_show)) } })
-        Spacer(Modifier.height(20.dp))
-        Button(onClick = { submitted = true; if (name.isNotBlank() && token.isNotBlank()) onConnect(name, token) }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.storage_boxes_connect)) }
-        TextButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.common_cancel)) }
+    credentialToForget?.let { credentialId ->
+        AlertDialog(
+            onDismissRequest = { credentialToForget = null },
+            title = { Text(stringResource(R.string.storage_boxes_legacy_credentials_forget_title)) },
+            text = { Text(stringResource(R.string.storage_boxes_legacy_credentials_forget_message)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    legacyCredentialStore.removeCredential(credentialId)
+                    legacyCredentials = legacyCredentialStore.credentials()
+                    credentialToForget = null
+                }) { Text(stringResource(R.string.storage_boxes_legacy_credentials_forget_confirm)) }
+            },
+            dismissButton = { TextButton(onClick = { credentialToForget = null }) { Text(stringResource(R.string.common_cancel)) } },
+        )
     }
 }
 
 @Composable
 private fun StorageBoxCard(box: StorageBox, onClick: () -> Unit) = Card(Modifier.fillMaxWidth().clickable(onClick = onClick), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+    val context = LocalContext.current
     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(box.name ?: stringResource(R.string.storage_boxes_unnamed), style = MaterialTheme.typography.titleMedium)
         Text(box.status ?: stringResource(R.string.storage_boxes_status_unknown), color = MaterialTheme.colorScheme.onSurfaceVariant)
-        box.stats?.let { stats -> Text(stringResource(R.string.storage_boxes_usage, stats.sizeData, stats.size), style = MaterialTheme.typography.labelMedium) }
+        box.stats?.let { stats ->
+            Text(
+                stringResource(
+                    R.string.storage_boxes_usage_formatted,
+                    formatStorageBoxBytes(context, stats.sizeData),
+                    formatStorageBoxBytes(context, stats.size),
+                ),
+                style = MaterialTheme.typography.labelMedium,
+            )
+        }
     }
 }
+
+private fun formatStorageBoxBytes(context: android.content.Context, value: Number): String =
+    Formatter.formatFileSize(context, value.toLong().coerceAtLeast(0L))
 
 @Composable
 private fun StorageBoxDetailScreen(box: StorageBox, repository: StorageBoxRepository, onBack: () -> Unit) {
@@ -1385,9 +1651,9 @@ private fun StorageBoxDetailScreen(box: StorageBox, repository: StorageBoxReposi
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(stringResource(R.string.storage_boxes_stats), style = MaterialTheme.typography.titleMedium)
-                    Text(stringResource(R.string.storage_boxes_total, stats.size))
-                    Text(stringResource(R.string.storage_boxes_data, stats.sizeData))
-                    Text(stringResource(R.string.storage_boxes_snapshots, stats.sizeSnapshots))
+                    Text(stringResource(R.string.storage_boxes_total_formatted, formatStorageBoxBytes(LocalContext.current, stats.size)))
+                    Text(stringResource(R.string.storage_boxes_data_formatted, formatStorageBoxBytes(LocalContext.current, stats.sizeData)))
+                    Text(stringResource(R.string.storage_boxes_snapshots_formatted, formatStorageBoxBytes(LocalContext.current, stats.sizeSnapshots)))
                 }
             }
         } ?: item { Text(stringResource(R.string.storage_boxes_stats_unavailable), color = MaterialTheme.colorScheme.onSurfaceVariant) }
@@ -1539,17 +1805,19 @@ private fun TariffsEstimateScreen(repository: BillingRateCardRepository, project
                     StateView(stringResource(R.string.tariffs_incomplete_title), stringResource(R.string.tariffs_incomplete_message), stringResource(R.string.tariffs_retry)) { refreshKey++ }
                 } else {
                     Text(stringResource(R.string.tariffs_currency_vat, card.currency, card.vatRate), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    HCloudPullToRefresh(isRefreshing = false, onRefresh = { refreshKey++ }, modifier = Modifier.weight(1f)) {
+                    LazyColumn(state = rememberRestorableLazyListState("tariffs"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         items(card.serverTypes.sortedBy { it.name.lowercase() }, key = { it.id }) { type ->
                             Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                     Text(type.name, style = MaterialTheme.typography.titleMedium)
                                     type.locations.sortedBy { it.location }.forEach { rate ->
-                                        Text(stringResource(R.string.tariffs_rate, rate.location, rate.hourly.gross, card.currency, rate.monthly.gross, card.currency), style = MaterialTheme.typography.labelMedium)
+                                        Text(stringResource(R.string.tariffs_rate, rate.location, formatApiMoney(rate.hourly.gross), card.currency, formatApiMoney(rate.monthly.gross), card.currency), style = MaterialTheme.typography.labelMedium)
                                     }
                                 }
                             }
                         }
+                    }
                     }
                 }
             }
@@ -1594,16 +1862,31 @@ private fun StorageInventoryScreen(
             var selectedVolume by remember(projectId) { mutableStateOf<VolumeInventory?>(null) }
             var creatingVolume by remember(projectId) { mutableStateOf(false) }
             var deletingVolume by remember(projectId) { mutableStateOf<VolumeInventory?>(null) }
+            BackHandler(enabled = selectedVolume != null) { selectedVolume = null }
             val snapshots = current.images.filter { it.type.equals("snapshot", ignoreCase = true) }
             val backups = current.images.filter { it.type.equals("backup", ignoreCase = true) }
             selectedVolume?.let { volume ->
                 VolumeDetailScreen(initial = volume, repository = repository, onBack = { selectedVolume = null })
                 return
             }
-            LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            HCloudPullToRefresh(isRefreshing = false, onRefresh = { refreshKey++ }, modifier = Modifier.fillMaxSize()) {
+            LazyColumn(state = rememberRestorableLazyListState("storage"), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 item {
                     Text(stringResource(R.string.storage_inventory_title), style = MaterialTheme.typography.headlineMedium)
-                    Text(stringResource(R.string.storage_inventory_description), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        stringResource(
+                            if (operationsAllowed) R.string.storage_inventory_description_active
+                            else R.string.storage_inventory_description,
+                        ),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                if (!operationsAllowed) item {
+                    Text(
+                        stringResource(R.string.storage_operations_locked),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
                 item {
                     if (operationsAllowed) {
@@ -1627,6 +1910,7 @@ private fun StorageInventoryScreen(
                 if (snapshots.isEmpty() && backups.isEmpty() && current.volumes.isEmpty()) item {
                     StateView(stringResource(R.string.storage_empty_title), stringResource(R.string.storage_empty_message), stringResource(R.string.common_retry)) { refreshKey++ }
                 }
+            }
             }
             if (operationsAllowed) volumeAction?.let { request ->
                 VolumeActionConfirmation(
@@ -1683,6 +1967,13 @@ private fun VolumeInventorySection(
                     Text(if (attachedServerId == null) stringResource(R.string.storage_volume_unattached) else stringResource(R.string.storage_volume_attached, attachedServerId), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text(stringResource(R.string.common_status_format, volume.status), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text(stringResource(if (volume.deleteProtected) R.string.common_protected_enabled else R.string.common_protected_disabled), style = MaterialTheme.typography.labelMedium, color = if (volume.deleteProtected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (operationsAllowed) {
+                        Text(
+                            stringResource(R.string.storage_volume_protection_details),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                     Spacer(Modifier.height(4.dp))
                     if (operationsAllowed) {
                         if (volume.serverId == null) {
@@ -1893,11 +2184,11 @@ private fun CreateVolumeDialog(
                                 onClick = { locationMenuExpanded = true },
                                 enabled = !submitting,
                                 modifier = Modifier.fillMaxWidth(),
-                            ) { Text(selectedLocation?.let { "${it.name} · ${it.city}" } ?: stringResource(R.string.volume_location)) }
+                            ) { Text(selectedLocation?.displayName() ?: stringResource(R.string.volume_location)) }
                             DropdownMenu(expanded = locationMenuExpanded, onDismissRequest = { locationMenuExpanded = false }) {
                                 locations.orEmpty().forEach { location ->
                                     DropdownMenuItem(
-                                        text = { Text("${location.name} · ${location.city}") },
+                                        text = { Text(location.displayName()) },
                                         onClick = { selectedLocation = location; locationMenuExpanded = false },
                                     )
                                 }
@@ -2063,6 +2354,7 @@ private fun PrimaryIpInventoryScreen(repository: HCloudRepository, projectId: St
     var selectedPrivateNetworkDetail by remember(projectId) { mutableStateOf<PrivateNetworkInventory?>(null) }
     var creatingPrivateNetwork by remember(projectId) { mutableStateOf(false) }
     var selectedFirewall by remember(projectId) { mutableStateOf<FirewallInventory?>(null) }
+    BackHandler(enabled = selectedFirewall != null) { selectedFirewall = null }
     val scope = rememberCoroutineScope()
     fun load() {
         state = PrimaryIpState.Loading
@@ -2097,7 +2389,8 @@ private fun PrimaryIpInventoryScreen(repository: HCloudRepository, projectId: St
                 FirewallDetailScreen(initial = firewall, repository = repository, onBack = { selectedFirewall = null })
                 return
             }
-            LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            HCloudPullToRefresh(isRefreshing = false, onRefresh = { refreshKey++ }, modifier = Modifier.fillMaxSize()) {
+            LazyColumn(state = rememberRestorableLazyListState("network"), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 item {
                     Text(stringResource(R.string.network_title), style = MaterialTheme.typography.headlineMedium)
                     Text(stringResource(R.string.network_description), color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -2133,6 +2426,7 @@ private fun PrimaryIpInventoryScreen(repository: HCloudRepository, projectId: St
                 if (current.ips.isEmpty() && current.floatingIps.isEmpty() && current.firewalls.isEmpty() && current.networks.isEmpty() && current.loadBalancers.isEmpty() && current.placementGroups.isEmpty()) item {
                     StateView(stringResource(R.string.network_empty_title), stringResource(R.string.network_empty_message), stringResource(R.string.common_retry)) { refreshKey++ }
                 }
+            }
             }
             firewallAction?.let { request ->
                 FirewallActionConfirmation(
@@ -3046,8 +3340,8 @@ private fun CreatePrimaryIpDialog(
                         }
                     }
                     if (locationsLoading) CircularProgressIndicator(Modifier.size(20.dp)) else Box {
-                        OutlinedButton(onClick = { locationMenu = true }, enabled = !submitting, modifier = Modifier.fillMaxWidth()) { Text(selectedLocation?.name ?: stringResource(R.string.primary_ip_create_location)) }
-                        DropdownMenu(locationMenu, { locationMenu = false }) { locations.forEach { location -> DropdownMenuItem(text = { Text("${location.name} · ${location.city}") }, onClick = { selectedLocation = location; selectedAssignee = null; locationMenu = false }) } }
+                        OutlinedButton(onClick = { locationMenu = true }, enabled = !submitting, modifier = Modifier.fillMaxWidth()) { Text(selectedLocation?.displayName() ?: stringResource(R.string.primary_ip_create_location)) }
+                        DropdownMenu(locationMenu, { locationMenu = false }) { locations.forEach { location -> DropdownMenuItem(text = { Text(location.displayName()) }, onClick = { selectedLocation = location; selectedAssignee = null; locationMenu = false }) } }
                     }
                     selectedLocation?.let {
                         Box {
@@ -3063,7 +3357,7 @@ private fun CreatePrimaryIpDialog(
                     Text(stringResource(R.string.primary_ip_create_review_intro), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     DetailRow(stringResource(R.string.primary_ip_create_name), name.trim())
                     DetailRow(stringResource(R.string.primary_ip_create_type), type.uppercase())
-                    DetailRow(stringResource(R.string.primary_ip_create_location), selectedLocation!!.name)
+                    DetailRow(stringResource(R.string.primary_ip_create_location), selectedLocation!!.displayName())
                     DetailRow(stringResource(R.string.primary_ip_create_assignee), selectedAssignee?.let { "${it.name} (#${it.id})" } ?: stringResource(R.string.primary_ip_create_unassigned))
                     DetailRow(stringResource(R.string.primary_ip_create_labels), labels!!.entries.joinToString { "${it.key}=${it.value}" }.ifBlank { stringResource(R.string.common_none) })
                     Text(stringResource(R.string.primary_ip_create_price_notice), color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -3425,7 +3719,6 @@ private fun InventorySection(title: String, images: List<BackupSnapshotImage>) =
 private fun SettingsScreen(
     activeProject: CloudProjectConnection,
     connections: List<CloudProjectConnection>,
-    getProfile: GetProfileUseCase,
     onAddProject: () -> Unit,
     onDisconnect: () -> Unit,
     appearanceMode: AppearanceMode,
@@ -3436,23 +3729,6 @@ private fun SettingsScreen(
     var pendingHighImpactChange by remember { mutableStateOf<Boolean?>(null) }
     val highImpactOperations = LocalHighImpactOperations.current
     var languageMode by remember { mutableStateOf(currentLanguageMode()) }
-    var profileState by remember(activeProject.id) { mutableStateOf<CloudProfileState>(CloudProfileState.Loading) }
-    var profileLoadGeneration by remember(activeProject.id) { mutableStateOf(0L) }
-    val scope = rememberCoroutineScope()
-    val profileLoadFallback = stringResource(R.string.settings_profile_load_failed)
-    fun refreshProfile() {
-        val generation = ++profileLoadGeneration
-        profileState = CloudProfileState.Loading
-        scope.launch {
-            val result = try {
-                CloudProfileState.Content(withContext(Dispatchers.IO) { getProfile() })
-            } catch (error: Throwable) {
-                CloudProfileState.Error(safeApiFailureMessage(error, profileLoadFallback))
-            }
-            if (generation == profileLoadGeneration) profileState = result
-        }
-    }
-    LaunchedEffect(activeProject.id) { refreshProfile() }
     Column(
         Modifier.fillMaxSize().padding(24.dp).verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -3523,28 +3799,27 @@ private fun SettingsScreen(
         Text(pluralStringResource(R.plurals.settings_projects_configured, connections.size, connections.size), color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(stringResource(R.string.settings_active_project, activeProject.displayName), style = MaterialTheme.typography.titleMedium)
         Text(stringResource(R.string.settings_profile_title), style = MaterialTheme.typography.titleMedium)
-        when (val state = profileState) {
-            CloudProfileState.Loading -> Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                Text(stringResource(R.string.settings_profile_loading), color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            is CloudProfileState.Content -> Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-            ) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(state.profile.name, style = MaterialTheme.typography.titleMedium)
-                    Text(stringResource(R.string.settings_profile_id, state.profile.id), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(stringResource(R.string.settings_profile_email, state.profile.email), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(stringResource(R.string.settings_profile_read_only_note), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-            is CloudProfileState.Error -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(state.message, color = MaterialTheme.colorScheme.error)
-                OutlinedButton(onClick = ::refreshProfile) { Text(stringResource(R.string.settings_profile_retry)) }
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        ) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(activeProject.displayName, style = MaterialTheme.typography.titleMedium)
+                Text(
+                    stringResource(
+                        if (activeProject.config.kind == ConnectionKind.REAL) {
+                            R.string.settings_profile_project_connection
+                        } else {
+                            R.string.settings_profile_test_connection
+                        },
+                    ),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    stringResource(R.string.settings_profile_api_scope_note),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
         if (activeProject.config.kind == ConnectionKind.TEST_MOCK) {

@@ -1,0 +1,9 @@
+<resources>
+    <string name="storage_boxes_usage_formatted">Data: %1$s of %2$s</string>
+    <string name="storage_boxes_total_formatted">Total: %1$s</string>
+    <string name="storage_boxes_data_formatted">Data: %1$s</string>
+    <string name="storage_boxes_snapshots_formatted">Snapshots: %1$s</string>
+    <string name="storage_operations_locked">Actions such as creating, attaching, detaching, resizing, or changing deletion protection are hidden. Enable high-impact operations in Settings to review and use them.</string>
+    <string name="storage_volume_protection_details">Open this volume to change deletion protection.</string>
+    <string name="storage_inventory_description_active">Inventory of volumes, snapshots and backups in the current Cloud project. Review each action before sending it to Hetzner Cloud.</string>
+</resources>
