@@ -1,0 +1,7 @@
+<resources>
+    <string name="connection_checking">Checking connection…</string>
+    <string name="connection_check_offline">Connection unavailable. Check your network and try again.</string>
+    <string name="connection_check_invalid_token">The API token is invalid or revoked. Check the token.</string>
+    <string name="connection_check_denied">This token cannot access the requested resources.</string>
+    <string name="connection_check_service">Could not verify this connection. Try checking again later.</string>
+</resources>

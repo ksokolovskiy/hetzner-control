@@ -1,0 +1,5 @@
+<resources>
+    <string name="server_filter_all">Все</string>
+    <string name="server_filter_running">Работают</string>
+    <string name="server_filter_off">Выключены</string>
+</resources>

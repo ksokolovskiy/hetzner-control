@@ -1,0 +1,4 @@
+<resources>
+    <string name="operation_journal_unavailable_title">История операций недоступна</string>
+    <string name="operation_journal_unavailable_message">Не удалось прочитать сохранённую историю операций. Просмотр доступен; изменения отключены, чтобы не повторить операцию с неизвестным результатом. Перезапустите приложение для повторного чтения.</string>
+</resources>

@@ -126,7 +126,7 @@ internal interface HCloudApi {
     suspend fun createVolume(@Body request: CreateVolumeRequestDto): CreateVolumeResponse
 
     @DELETE("volumes/{id}")
-    suspend fun deleteVolume(@Path("id") volumeId: Long): ActionResponse
+    suspend fun deleteVolume(@Path("id") volumeId: Long): retrofit2.Response<Unit>
 
     @POST("volumes/{id}/actions/change_protection")
     suspend fun changeVolumeProtection(@Path("id") volumeId: Long, @Body patch: DeleteProtectionPatchDto): ActionResponse
@@ -261,15 +261,15 @@ internal interface HCloudApi {
     @POST("networks")
     suspend fun createNetwork(@Body request: CreateNetworkRequestDto): CreateNetworkResponse
 
-    /** API returns the asynchronous action rather than a bare 204. */
+    /** Official DELETE response is 204, not an action envelope. */
     @DELETE("networks/{id}")
-    suspend fun deleteNetwork(@Path("id") networkId: Long): ActionResponse
+    suspend fun deleteNetwork(@Path("id") networkId: Long): retrofit2.Response<Unit>
 
     @POST("networks/{id}/actions/add_subnet")
     suspend fun addNetworkSubnet(@Path("id") networkId: Long, @Body request: NetworkSubnetRequestDto): ActionResponse
 
     @POST("networks/{id}/actions/delete_subnet")
-    suspend fun deleteNetworkSubnet(@Path("id") networkId: Long, @Body request: NetworkSubnetRequestDto): ActionResponse
+    suspend fun deleteNetworkSubnet(@Path("id") networkId: Long, @Body request: DeleteNetworkSubnetRequestDto): ActionResponse
 
     @POST("networks/{id}/actions/add_route")
     suspend fun addNetworkRoute(@Path("id") networkId: Long, @Body request: NetworkRouteRequestDto): ActionResponse
@@ -366,7 +366,6 @@ internal interface HCloudApi {
     @POST("servers/{id}/actions/remove_from_placement_group")
     suspend fun removeServerFromPlacementGroup(
         @Path("id") serverId: Long,
-        @Body request: PlacementGroupRequestDto,
     ): ActionResponse
 
     @POST("volumes/{id}/actions/attach")
@@ -400,13 +399,13 @@ internal interface HCloudApi {
     suspend fun createServer(@Body request: CreateServerRequestDto): CreateServerResponse
 
     @DELETE("servers/{id}")
-    suspend fun deleteServer(@Path("id") serverId: Long)
+    suspend fun deleteServer(@Path("id") serverId: Long): ActionResponse
 
     @POST("servers/{id}/actions/rebuild")
     suspend fun rebuildServer(
         @Path("id") serverId: Long,
         @Body request: RebuildServerRequestDto,
-    ): RootPasswordActionResponse
+    ): RebuildServerResponse
 
     @POST("servers/{id}/actions/change_type")
     suspend fun changeServerType(

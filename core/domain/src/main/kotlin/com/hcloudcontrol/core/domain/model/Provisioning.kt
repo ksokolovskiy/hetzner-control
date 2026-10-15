@@ -11,6 +11,8 @@ data class ServerTypeOption(
     val category: String?,
     val architecture: String?,
     val availableLocations: Set<String>,
+    val storageType: String? = null,
+    val cpuType: String? = null,
 )
 
 /** Read-only server type detail and availability from the Cloud API. */
@@ -26,6 +28,8 @@ data class ServerTypeDetails(
     val locations: List<ServerTypeLocationAvailability>,
     /** Exact API pricing joined by type/location; it is never calculated locally. */
     val prices: List<ServerTypeLocationPrice>,
+    val storageType: String? = null,
+    val cpuType: String? = null,
 )
 
 data class ServerTypeLocationAvailability(val name: String, val available: Boolean?)
@@ -118,6 +122,8 @@ data class VolumeInventory(
     val status: String,
     val deleteProtected: Boolean,
     val labels: Map<String, String>,
+    /** False means the provider omitted protection; never display or treat it as disabled. */
+    val protectionKnown: Boolean = true,
 )
 
 /**
@@ -138,10 +144,11 @@ data class CreateVolumeSpec(
     }
 }
 
-/** Result returned by POST /volumes. The action may be null when the API completed synchronously. */
+/** Result returned by POST /volumes. Every original action must complete, including nextActions. */
 data class CreatedVolume(
     val volume: VolumeInventory,
-    val action: CloudAction?,
+    val action: CloudAction,
+    val nextActions: List<CloudAction> = emptyList(),
 )
 
 /** The non-server protection action is intentionally deletion-only. */
@@ -189,6 +196,8 @@ data class PrimaryIpInventory(
     val deleteProtected: Boolean,
     val labels: Map<String, String>,
     val dnsPointers: List<DnsPointer>,
+    /** False means the provider omitted protection; never display or treat it as disabled. */
+    val protectionKnown: Boolean = true,
 )
 
 data class FloatingIpInventory(
@@ -202,6 +211,8 @@ data class FloatingIpInventory(
     val deleteProtected: Boolean,
     val labels: Map<String, String>,
     val dnsPointers: List<DnsPointer>,
+    /** False means the provider omitted protection; never display or treat it as disabled. */
+    val protectionKnown: Boolean = true,
 )
 
 /** Read-only certificate metadata. Certificate/private-key material is deliberately excluded. */
@@ -292,6 +303,8 @@ data class PrivateNetworkInventory(
     val serverIds: List<Long>,
     val deleteProtected: Boolean,
     val labels: Map<String, String>,
+    /** False means the provider omitted protection; never display or treat it as disabled. */
+    val protectionKnown: Boolean = true,
 )
 
 data class PrivateNetworkSubnet(
@@ -346,7 +359,7 @@ data class PrivateNetworkRouteSpec(
 
 data class CreatedPrivateNetwork(
     val network: PrivateNetworkInventory,
-    val action: CloudAction,
+    val action: CloudAction? = null,
 )
 
 /** Read-only attachment returned by GET /networks/{id}/members. */
@@ -373,6 +386,8 @@ data class LoadBalancerInventory(
     val labels: Map<String, String>,
     /** API-provided price strings for this type; no currency conversion or rounding is performed. */
     val prices: List<LoadBalancerLocationPrice>,
+    /** False means the provider omitted protection; never display or treat it as disabled. */
+    val protectionKnown: Boolean = true,
 )
 
 data class LoadBalancerPublicInterface(
@@ -478,6 +493,7 @@ data class LocationOption(
     val description: String,
     val city: String?,
     val country: String?,
+    val networkZone: String? = null,
 )
 
 /** Read-only Location detail from GET /locations/{id}. */

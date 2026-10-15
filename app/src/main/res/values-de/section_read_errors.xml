@@ -1,0 +1,4 @@
+<resources>
+    <string name="ds_authentication">Der Zugangsschlüssel ist ungültig oder wurde widerrufen. Verbinden Sie sich erneut, um den Zugriff zu prüfen.</string>
+    <string name="ds_offline">Der Dienst ist nicht erreichbar. Prüfen Sie Ihre Verbindung und laden Sie erneut.</string>
+</resources>

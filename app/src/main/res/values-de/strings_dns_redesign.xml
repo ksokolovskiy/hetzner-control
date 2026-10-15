@@ -1,0 +1,5 @@
+<resources>
+    <string name="dns_value_detail_title">RRset-Werte</string>
+    <string name="dns_copy_value">Wert kopieren</string>
+    <string name="dns_copy_failed">Wert konnte nicht kopiert werden</string>
+</resources>

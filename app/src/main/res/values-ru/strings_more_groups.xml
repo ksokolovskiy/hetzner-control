@@ -1,0 +1,8 @@
+<resources>
+    <string name="more_group_resources">Хранилища и образы</string>
+    <string name="more_group_network">Сетевые сервисы</string>
+    <string name="more_group_access">Доступ</string>
+    <string name="more_group_application">Приложение и проект</string>
+    <string name="more_group_cloud_resources">Ресурсы Cloud</string>
+    <string name="more_group_products">Отдельные продукты</string>
+</resources>

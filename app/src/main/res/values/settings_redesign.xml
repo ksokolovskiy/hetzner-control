@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_group_application">Application</string>
+    <string name="settings_group_safety">Safety</string>
+    <string name="settings_group_projects">Projects</string>
+    <string name="settings_all_connections">All connections</string>
+    <string name="settings_search_connections">Search connections</string>
+    <string name="settings_selected_connection">Selected</string>
+    <string name="settings_privacy_policy">Privacy policy</string>
+    <string name="settings_external_link">Open official external page</string>
+    <string name="settings_profile_shared_scope">Cloud and Storage Box management use this project’s Cloud API token. Object Storage uses a separate S3 connection.</string>
+    <string name="settings_profile_local_note">Removing this connection only removes credentials from this device. Provider resources and the provider token remain unchanged. Revoke the token in Hetzner Console if needed. Pending operations keep their original identity; reconnect to check their status.</string>
+    <string name="settings_global_gate_note">This setting applies to all projects on this device. It grants no API permissions and does not disable resource protection. Each operation still needs a separate review.</string>
+    <string name="settings_risk_acknowledgement">I understand that changes can incur costs, interrupt services or permanently delete data.</string>
+    <string name="settings_connection_title">Connection %1$s</string>
+    <string name="settings_profile_selected_note">Selected for Cloud requests. Selection alone does not verify API authorization.</string>
+    <string name="settings_profile_not_selected_note">Not selected. Viewing this profile does not switch the active Cloud project.</string>
+    <string name="settings_switch_to_project">Use this project</string>
+    <string name="settings_pending_operation_warning">Pending or unknown operations: %1$d. Their original project and resource identity will remain. Reconnecting may be required to check their status.</string>
+    <string name="connection_safe_diagnostics">Diagnostics: %1$s</string>
+    <string name="connection_official_console_help">Get or revoke a token in the official Hetzner Console</string>
+</resources>

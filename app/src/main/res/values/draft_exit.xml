@@ -1,0 +1,6 @@
+<resources>
+    <string name="ds_leave_form">Leave this form?</string>
+    <string name="ds_leave_form_description">Keep the draft to continue later, or discard the changes. Cancel to stay here. Credentials are never included in a saved draft.</string>
+    <string name="ds_keep_draft">Keep draft and leave</string>
+    <string name="ds_discard_draft">Discard and leave</string>
+</resources>

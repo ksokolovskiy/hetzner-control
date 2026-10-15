@@ -1,0 +1,5 @@
+<resources>
+    <string name="metric_series_summary">Последнее: %1$s · Мин.: %2$s · Макс.: %3$s</string>
+    <string name="metric_series_show_samples">Все замеры: %1$d (Unix-секунды: значение)</string>
+    <string name="metric_series_hide_samples">Скрыть замеры: %1$d</string>
+</resources>

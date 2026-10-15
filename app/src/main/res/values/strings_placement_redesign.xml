@@ -1,0 +1,5 @@
+<resources>
+    <string name="placement_groups_name_required">Enter a placement group name.</string>
+    <string name="placement_groups_metadata_note">Metadata changes do not change membership. Member operations are reviewed separately. Deleting a group does not delete its servers.</string>
+    <string name="placement_groups_candidates_changed">The selected server is no longer eligible. Choose another server.</string>
+</resources>

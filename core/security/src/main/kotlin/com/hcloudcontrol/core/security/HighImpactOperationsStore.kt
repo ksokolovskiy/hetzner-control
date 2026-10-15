@@ -1,6 +1,7 @@
 package com.hcloudcontrol.core.security
 
 import android.content.Context
+import android.content.SharedPreferences
 
 /**
  * Explicit, device-local consent for actions that can incur cost, change service
@@ -26,11 +27,14 @@ interface HighImpactOperationsStore {
     fun setAllowed(allowed: Boolean)
 }
 
-class PersistentHighImpactOperationsStore(context: Context) : HighImpactOperationsStore {
-    private val preferences = context.getSharedPreferences(FILE_NAME, Context.MODE_PRIVATE)
+class PersistentHighImpactOperationsStore internal constructor(
+    private val preferences: SharedPreferences,
+    private val failureLatch: PersistenceFailureLatch,
+) : HighImpactOperationsStore {
+    constructor(context: Context) : this(context.getSharedPreferences(FILE_NAME, Context.MODE_PRIVATE), processFailureLatch)
 
     override fun capability(): HighImpactOperationsCapability = if (
-        preferences.getBoolean(ALLOWED_KEY, false)
+        !failureLatch.blocked && preferences.getBoolean(ALLOWED_KEY, false)
     ) {
         HighImpactOperationsCapability.Allowed
     } else {
@@ -38,10 +42,17 @@ class PersistentHighImpactOperationsStore(context: Context) : HighImpactOperatio
     }
 
     override fun setAllowed(allowed: Boolean) {
-        preferences.edit().putBoolean(ALLOWED_KEY, allowed).apply()
+        try {
+            checkedPreferenceUpdate(preferences, setOf(ALLOWED_KEY)) { putBoolean(ALLOWED_KEY, allowed) }
+            failureLatch.confirmedExplicitWrite()
+        } catch (_: Exception) {
+            failureLatch.markFailed()
+            throw LocalPersistenceException()
+        }
     }
 
     private companion object {
+        val processFailureLatch = PersistenceFailureLatch()
         const val FILE_NAME = "hcloud_high_impact_operations"
         const val ALLOWED_KEY = "high_impact_operations_allowed"
     }

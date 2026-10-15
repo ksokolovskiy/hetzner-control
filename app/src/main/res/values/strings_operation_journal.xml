@@ -1,0 +1,4 @@
+<resources>
+    <string name="operation_journal_unavailable_title">Operation history unavailable</string>
+    <string name="operation_journal_unavailable_message">The saved operation history could not be read. Viewing remains available; changes are disabled to prevent repeating an operation with an unknown result. Restart the app to try reading it again.</string>
+</resources>

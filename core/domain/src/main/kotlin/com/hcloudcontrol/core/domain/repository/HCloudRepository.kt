@@ -58,6 +58,11 @@ interface HCloudRepository {
     suspend fun deleteServer(serverId: Long) {
         throw UnsupportedOperationException("Deleting servers is unavailable")
     }
+    /** Preserve the provider's original asynchronous delete action when available. */
+    suspend fun deleteServerWithAction(serverId: Long): CloudAction? {
+        deleteServer(serverId)
+        return null
+    }
     /** Reinstalls the selected image. No implicit/default image is ever permitted. */
     suspend fun rebuildServer(serverId: Long, spec: ServerRebuildSpec): RebuiltServerResult {
         throw UnsupportedOperationException("Rebuilding servers is unavailable")
@@ -93,7 +98,8 @@ interface HCloudRepository {
     /** Creates an unattached, billable Volume at a named Cloud location. */
     suspend fun createVolume(spec: CreateVolumeSpec): CreatedVolume
     /** Deletes a Volume. Callers must make the data-loss confirmation explicit. */
-    suspend fun deleteVolume(volumeId: Long): CloudAction
+    /** Null denotes the documented authoritative 204 response, not an invented Action. */
+    suspend fun deleteVolume(volumeId: Long): CloudAction?
     /** Changes deletion protection through the documented asynchronous Volume action. */
     suspend fun changeVolumeProtection(volumeId: Long, patch: DeleteProtectionPatch): CloudAction {
         throw UnsupportedOperationException("Changing Volume protection is unavailable")
@@ -160,7 +166,7 @@ interface HCloudRepository {
     suspend fun getPrivateNetworkMembers(networkId: Long): List<PrivateNetworkMember>
     suspend fun getPrivateNetworkActions(networkId: Long): List<CloudAction>
     /** Removes the entire private network and all of its topology. Require typed-name confirmation. */
-    suspend fun deletePrivateNetwork(networkId: Long): CloudAction {
+    suspend fun deletePrivateNetwork(networkId: Long): CloudAction? {
         throw UnsupportedOperationException("Deleting private networks is unavailable")
     }
     /** Topology changes can interrupt traffic and must be individually reviewed. */

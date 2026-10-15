@@ -1,0 +1,29 @@
+<resources>
+    <string name="network_ip_review_assignment">Serverzuweisung</string>
+    <string name="network_ip_protection_unknown">Löschschutz ist unbekannt</string>
+    <string name="network_ip_reason_assigned">Diese Primary IP ist bereits zugewiesen.</string>
+    <string name="network_ip_reason_unknown_location">Standort konnte nicht geprüft werden.</string>
+    <string name="network_ip_reason_location">Ein Server am selben Standort ist erforderlich.</string>
+    <string name="network_ip_reason_power">Der Server muss ausgeschaltet sein.</string>
+    <string name="network_ip_reason_family">Der Server besitzt bereits eine Primary IP dieser Adressfamilie.</string>
+    <string name="network_ip_reason_missing_primary">Eine Primary IP derselben Adressfamilie ist erforderlich.</string>
+    <string name="network_ip_reason_unknown_zone">Netzwerkzone konnte nicht geprüft werden.</string>
+    <string name="network_ip_reason_zone">Ein Server in derselben Netzwerkzone ist erforderlich.</string>
+    <string name="network_ip_reason_assignee">Dieser Zuweisungstyp wird hier nicht unterstützt.</string>
+    <string name="network_ip_create_risk">Ich verstehe, dass eine kostenpflichtige Primary IP erstellt wird. Die genauen Kosten sind hier nicht verfügbar.</string>
+    <string name="network_ip_assign">Server zuweisen</string>
+    <string name="network_ip_unassign">Vom Server trennen</string>
+    <string name="network_ip_delete">IP löschen</string>
+    <string name="network_ip_mutation_risk">Ich verstehe, dass dies die öffentliche Verbindung unterbrechen kann. Schutz und Zuweisung werden nicht automatisch geändert.</string>
+    <string name="network_ptr_title">Reverse DNS</string>
+    <string name="network_ptr_reset">Ein leerer Wert setzt den Anbieterstandard zurück (dns_ptr: null).</string>
+    <string name="network_ptr_risk">Ich verstehe, dass Reverse DNS für die gewählte Adresse geändert wird.</string>
+    <string name="network_ptr_invalid">Hostnamen ohne abschließenden Punkt, URL oder IP-Adresse eingeben.</string>
+    <string name="network_ptr_review_failed">Die Ressource wurde geändert oder konnte nicht geprüft werden. Aktualisieren und erneut prüfen.</string>
+    <string name="network_public_ips">Öffentliche IP-Adressen</string>
+    <string name="network_search_categories">Netzwerkressource suchen</string>
+    <string name="network_public_counts">%1$s Primary IP · %2$s Floating IP</string>
+    <string name="network_resource_count">%1$d Ressourcen</string>
+    <string name="network_search_public_ips">Nach Name, Adresse oder Server suchen</string>
+    <string name="network_floating_scope_note">Primary IPs können hier erstellt werden. Floating IPs lassen sich in dieser Version verwalten, aber nicht erstellen.</string>
+</resources>

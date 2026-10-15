@@ -29,7 +29,7 @@ class ServerConfigurationContractTest {
             val renamed = repository.updateServerConfiguration(42, ServerConfigurationPatch(name = "renamed"))
             val configured = repository.updateServerConfiguration(
                 42,
-                ServerConfigurationPatch(labels = emptyMap(), placementGroupId = 77),
+                ServerConfigurationPatch(labels = emptyMap()),
             )
 
             assertEquals("renamed", renamed.name)
@@ -45,7 +45,7 @@ class ServerConfigurationContractTest {
             assertFalse(nameBody.contains("labels"))
             assertEquals("Bearer $cloudToken", nameRequest.getHeader("Authorization"))
             assertEquals("PUT", configurationRequest.method)
-            assertEquals("{\"labels\":{},\"placement_group\":77}", configurationBody)
+            assertEquals("{\"labels\":{}}", configurationBody)
             assertEquals("Bearer $cloudToken", configurationRequest.getHeader("Authorization"))
             assertFalse(configurationRequest.toString().contains(otherToken))
         }

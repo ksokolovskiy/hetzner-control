@@ -1,10 +1,12 @@
 package com.hcloudcontrol
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -17,31 +19,33 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import com.hcloudcontrol.core.domain.model.LocationDetails
 import com.hcloudcontrol.core.domain.model.LocationOption
-import com.hcloudcontrol.core.domain.model.ServerTypeDetails
 import com.hcloudcontrol.core.domain.model.ServerTypeOption
 import com.hcloudcontrol.core.domain.repository.HCloudRepository
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import com.hcloudcontrol.ui.designsystem.ChoiceItem
+import com.hcloudcontrol.ui.designsystem.HCloudTabs
+import com.hcloudcontrol.ui.designsystem.HCloudFilterChip
+import com.hcloudcontrol.ui.designsystem.HCloudResourceCard
+import com.hcloudcontrol.ui.designsystem.ResourceCardModel
+import com.hcloudcontrol.ui.designsystem.HCloudSectionState
+import com.hcloudcontrol.ui.designsystem.SectionKind
+import com.hcloudcontrol.ui.designsystem.SectionPresentation
+import com.hcloudcontrol.ui.navigation.*
+import com.hcloudcontrol.ui.state.rememberSectionLoader
+import com.hcloudcontrol.ui.state.SectionLoader
+import com.hcloudcontrol.ui.designsystem.HCloudReadSection
+import com.hcloudcontrol.ui.designsystem.HCloudFormField
+import com.hcloudcontrol.operations.LocalOperationContext
 
-private sealed interface ServerCatalogState {
-    data object Loading : ServerCatalogState
-    data class Content(val types: List<ServerTypeOption>, val locations: List<LocationOption>) : ServerCatalogState
-    data class Error(val message: String) : ServerCatalogState
-}
-private sealed interface TypeDetailState { data object Loading : TypeDetailState; data class Content(val value: ServerTypeDetails) : TypeDetailState; data class Error(val message: String) : TypeDetailState }
-private sealed interface LocationDetailState { data object Loading : LocationDetailState; data class Content(val value: LocationDetails) : LocationDetailState; data class Error(val message: String) : LocationDetailState }
+private data class CatalogInventory(val types: List<ServerTypeOption>, val locations: List<LocationOption>)
 
 /** A discovery surface that hands server choices to the one existing provisioning form. */
 @Composable
@@ -54,33 +58,33 @@ internal fun ServerCatalogScreen(
     onOpenSettings: () -> Unit,
 ) {
     val changesAllowed = LocalHighImpactOperations.current.isAllowed
-    var refreshKey by remember(projectId) { mutableIntStateOf(0) }
-    var state by remember(projectId) { mutableStateOf<ServerCatalogState>(ServerCatalogState.Loading) }
-    var type by remember(projectId) { mutableStateOf<ServerTypeOption?>(null) }
-    var location by remember(projectId) { mutableStateOf<LocationOption?>(null) }
-    BackHandler(enabled = type != null || location != null) {
+    val catalogScope = "$projectId:${LocalNavigationContext.current?.endpoint}:${LocalOperationContext.current}:catalog"
+    val types = rememberSectionLoader("$catalogScope:types", isEmpty = { it: List<ServerTypeOption> -> it.isEmpty() }) { repository.getServerTypes() }
+    val locations = rememberSectionLoader("$catalogScope:locations", isEmpty = { it: List<LocationOption> -> it.isEmpty() }) { repository.getLocations() }
+    var typeId by rememberContextualResourceId("$catalogScope:type")
+    var locationId by rememberContextualResourceId("$catalogScope:location")
+    val type = types.state.data?.firstOrNull { it.id == typeId }
+    val location = locations.state.data?.firstOrNull { it.id == locationId }
+    var catalogTab by rememberSaveable(catalogScope) { mutableStateOf("types") }
+    var coreFilter by rememberSaveable(catalogScope) { mutableStateOf<Int?>(null) }
+    var query by rememberSaveable(catalogScope) { mutableStateOf("") }
+    val hosted = LocalNavigationChrome.current != null
+    typeId?.let { id -> RegisterResourceChildNavigation(RootDestination.CREATE, ResourceType.SERVER_TYPE, id.toString(), type?.name ?: stringResource(R.string.server_catalog_title)) { typeId = null } }
+    locationId?.let { id -> RegisterResourceChildNavigation(RootDestination.CREATE, ResourceType.LOCATION, id.toString(), location?.displayName() ?: stringResource(R.string.server_catalog_title)) { locationId = null } }
+    BackHandler(enabled = !hosted && (typeId != null || locationId != null)) {
         // Detail is always one level below the catalog; never fall through to the app root.
-        type = null
-        location = null
-    }
-    val loadError = stringResource(R.string.server_catalog_load_failed)
-    LaunchedEffect(projectId, refreshKey) {
-        state = ServerCatalogState.Loading
-        state = try {
-            val values = withContext(Dispatchers.IO) { repository.getServerTypes() to repository.getLocations() }
-            ServerCatalogState.Content(values.first, values.second)
-        } catch (cancelled: CancellationException) { throw cancelled }
-        catch (error: Throwable) { ServerCatalogState.Error(safeApiFailureMessage(error, loadError)) }
+        typeId = null
+        locationId = null
     }
     type?.let {
         ServerTypeDetailScreen(
             initial = it,
             repository = repository,
-            locations = (state as? ServerCatalogState.Content)?.locations.orEmpty(),
+            locations = locations,
             changesAllowed = changesAllowed,
-            onConfigure = { onConfigureServer(it, null) },
+            onConfigure = onConfigureServer,
             onOpenSettings = onOpenSettings,
-            onBack = { type = null },
+            onBack = { typeId = null },
         )
         return
     }
@@ -91,20 +95,25 @@ internal fun ServerCatalogScreen(
             changesAllowed = changesAllowed,
             onConfigure = { onConfigureServer(null, it) },
             onOpenSettings = onOpenSettings,
-            onBack = { location = null },
+            onBack = { locationId = null },
         )
         return
     }
-    when (val current = state) {
-        ServerCatalogState.Loading -> LoadingView(stringResource(R.string.server_catalog_loading))
-        is ServerCatalogState.Error -> StateView(stringResource(R.string.server_catalog_title), current.message, stringResource(R.string.common_retry)) { refreshKey++ }
-        is ServerCatalogState.Content -> HCloudPullToRefresh(
-            isRefreshing = false,
-            onRefresh = { refreshKey++ },
+    if (typeId != null || locationId != null) {
+        Column { if (typeId != null) HCloudReadSection(types) { HCloudSectionState(SectionPresentation(SectionKind.MISSING)) }
+            else HCloudReadSection(locations) { HCloudSectionState(SectionPresentation(SectionKind.MISSING)) } }
+        return
+    }
+    val current = CatalogInventory(types.state.data.orEmpty(), locations.state.data.orEmpty())
+    val visibleTypes = current.types.filter { catalogueMatches(query, it.name, it.description) && (coreFilter == null || it.cores == coreFilter) }
+    val visibleLocations = current.locations.filter { catalogueMatches(query, it.name, it.displayName(), it.country.orEmpty()) }
+    HCloudPullToRefresh(
+            isRefreshing = if (catalogTab == "types") types.state.refreshing else locations.state.refreshing,
+            onRefresh = { types.refresh(); locations.refresh() },
             modifier = Modifier.fillMaxSize(),
         ) {
-            LazyColumn(state = rememberRestorableLazyListState("server-catalog"), modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            item { Text(stringResource(R.string.server_catalog_title), style = MaterialTheme.typography.headlineMedium) }
+            LazyColumn(state = rememberRestorableLazyListState("$catalogScope:$catalogTab", contentReady = if (catalogTab == "types") types.state.data != null else locations.state.data != null), modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (!hosted) item { Text(stringResource(R.string.server_catalog_title), style = MaterialTheme.typography.headlineMedium) }
             item { Text(stringResource(R.string.server_catalog_description), color = MaterialTheme.colorScheme.onSurfaceVariant) }
             item {
                 if (changesAllowed) {
@@ -115,10 +124,40 @@ internal fun ServerCatalogScreen(
                     CatalogChangesDisabled(onOpenSettings)
                 }
             }
-            item { Text(stringResource(R.string.server_catalog_types), style = MaterialTheme.typography.titleLarge) }
-            items(current.types.sortedWith(compareBy<ServerTypeOption> { it.cores }.thenBy { it.memoryGb }.thenBy { it.diskGb }.thenBy { it.name }), key = { "t${it.id}" }) { item -> CatalogCard(item.name, "${item.cores} vCPU · ${item.memoryGb} GB · ${item.diskGb} GB", { type = item }) }
-            item { Text(stringResource(R.string.server_catalog_locations), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 8.dp)) }
-            items(current.locations.sortedBy { it.name }, key = { "l${it.id}" }) { item -> CatalogCard(item.displayName(), listOfNotNull(item.country).joinToString(" · "), { location = item }) }
+            item {
+                HCloudTabs(
+                    items = listOf(ChoiceItem("types", stringResource(R.string.server_catalog_types)), ChoiceItem("locations", stringResource(R.string.server_catalog_locations))),
+                    selectedId = catalogTab,
+                    onSelected = { catalogTab = it },
+                )
+                HCloudFormField(query, { query = it }, stringResource(R.string.ds_search))
+            }
+            if (catalogTab == "types") {
+                if (coreFilter != null) item {
+                    OutlinedButton(onClick = { coreFilter = null }) { Text(stringResource(R.string.provision_clear_filters)) }
+                }
+                item { HCloudReadSection(types) {} }
+                if (current.types.isNotEmpty() && visibleTypes.isEmpty()) {
+                    item { HCloudSectionState(SectionPresentation(SectionKind.NO_RESULTS)) }
+                }
+                item {
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        current.types.map { it.cores }.distinct().sorted().forEach { cores ->
+                            HCloudFilterChip(stringResource(R.string.provision_filter_cpu_active, cores), coreFilter == cores,
+                                onClick = { coreFilter = cores.takeUnless { coreFilter == cores } })
+                        }
+                    }
+                }
+                items(visibleTypes.sortedWith(compareBy<ServerTypeOption> { it.cores }.thenBy { it.memoryGb }.thenBy { it.diskGb }.thenBy { it.name }), key = { "t${it.id}" }) { item ->
+                    HCloudResourceCard(ResourceCardModel("$projectId:server-type:${item.id}", item.name, stringResource(R.string.server_catalog_open), stringResource(R.string.server_catalog_type_metadata, item.cores, item.memoryGb, item.diskGb)), onClick = { typeId = item.id })
+                }
+            } else {
+                item { HCloudReadSection(locations) {} }
+                if (current.locations.isNotEmpty() && visibleLocations.isEmpty()) item { HCloudSectionState(SectionPresentation(SectionKind.NO_RESULTS)) }
+                items(visibleLocations.sortedBy { it.name }, key = { "l${it.id}" }) { item ->
+                    HCloudResourceCard(ResourceCardModel("$projectId:location:${item.id}", item.displayName(), stringResource(R.string.server_catalog_open), listOfNotNull(item.country).joinToString(" · ")), onClick = { locationId = item.id })
+                }
+            }
             item {
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -135,26 +174,61 @@ internal fun ServerCatalogScreen(
             }
             }
         }
-    }
-}
-
-@Composable private fun CatalogCard(title: String, subtitle: String, onClick: () -> Unit) = Card(Modifier.fillMaxWidth().clickable(onClick = onClick), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) { Text(title, style = MaterialTheme.typography.titleMedium); if (subtitle.isNotBlank()) Text(subtitle, color = MaterialTheme.colorScheme.onSurfaceVariant); Text(stringResource(R.string.server_catalog_open), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium) }
 }
 
 @Composable private fun ServerTypeDetailScreen(
     initial: ServerTypeOption,
     repository: HCloudRepository,
-    locations: List<LocationOption>,
+    locations: SectionLoader<List<LocationOption>>,
     changesAllowed: Boolean,
-    onConfigure: () -> Unit,
+    onConfigure: (ServerTypeOption?, LocationOption?) -> Unit,
     onOpenSettings: () -> Unit,
     onBack: () -> Unit,
 ) {
-    val locationLabels = remember(locations) { locations.associate { it.name to it.displayName() } }
-    var retry by remember(initial.id) { mutableIntStateOf(0) }; var state by remember(initial.id) { mutableStateOf<TypeDetailState>(TypeDetailState.Loading) }; val failure = stringResource(R.string.server_catalog_type_failed)
-    LaunchedEffect(initial.id, retry) { state = TypeDetailState.Loading; state = try { TypeDetailState.Content(withContext(Dispatchers.IO) { repository.getServerType(initial.id) }) } catch (cancelled: CancellationException) { throw cancelled } catch (error: Throwable) { TypeDetailState.Error(safeApiFailureMessage(error, failure)) } }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) { item { OutlinedButton(onClick = onBack) { Text(stringResource(R.string.common_back)) } }; when (val current = state) { TypeDetailState.Loading -> item { Text(stringResource(R.string.server_catalog_loading)) }; is TypeDetailState.Error -> item { Column { Text(current.message); OutlinedButton(onClick = { retry++ }) { Text(stringResource(R.string.common_retry)) } } }; is TypeDetailState.Content -> item { val value = current.value; Text(value.name, style = MaterialTheme.typography.headlineMedium); Text(value.description); Text(stringResource(R.string.server_catalog_type_metadata, value.cores, value.memoryGb, value.diskGb)); value.category?.let { Text(stringResource(R.string.server_catalog_category, it)) }; value.architecture?.let { Text(stringResource(R.string.server_catalog_architecture, it)) }; Text(stringResource(R.string.server_catalog_availability), style = MaterialTheme.typography.titleMedium); value.locations.sortedBy { it.name }.forEach { availability -> Text(stringResource(if (availability.available == true) R.string.server_catalog_available else R.string.server_catalog_unavailable, locationLabels[availability.name] ?: availability.name)) }; Text(stringResource(R.string.server_catalog_prices), style = MaterialTheme.typography.titleMedium); if (value.prices.isEmpty()) Text(stringResource(R.string.server_catalog_prices_empty)); value.prices.sortedBy { it.location }.forEach { price -> Text(stringResource(R.string.server_catalog_price, locationLabels[price.location] ?: price.location, formatApiMoney(price.hourly.gross), formatApiMoney(price.monthly.gross), price.currency)) }; CatalogConfigureAction(changesAllowed, onConfigure, onOpenSettings) } } }
+    val scope = "${LocalOperationContext.current}:catalog:type:${initial.id}"
+    // Metadata remains usable when the independently fetched pricing response fails.
+    val metadata = rememberSectionLoader(scope + ":metadata", isEmpty = { it: List<ServerTypeOption> -> it.isEmpty() }) {
+        repository.getServerTypes().filter { it.id == initial.id }
+    }
+    val prices = rememberSectionLoader(scope + ":pricing") { repository.getServerType(initial.id) }
+    val locationLabels = locations.state.data.orEmpty().associate { it.name to it.displayName() }
+    HCloudPullToRefresh(metadata.state.refreshing || prices.state.refreshing || locations.state.refreshing, { metadata.refresh(); prices.refresh(); locations.refresh() }, Modifier.fillMaxSize()) {
+        LazyColumn(state = rememberRestorableLazyListState(scope, contentReady = metadata.state.data != null), modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            item { if (LocalNavigationChrome.current == null) OutlinedButton(onClick = onBack) { Text(stringResource(R.string.common_back)) } }
+            item {
+                HCloudReadSection(metadata) { values -> values.firstOrNull()?.let { value ->
+                    if (LocalNavigationChrome.current == null) Text(value.name, style = MaterialTheme.typography.headlineMedium)
+                    Text(value.description)
+                    Text(stringResource(R.string.server_catalog_type_metadata, value.cores, value.memoryGb, value.diskGb))
+                    value.category?.let { Text(stringResource(R.string.server_catalog_category, it)) }
+                    value.architecture?.let { Text(stringResource(R.string.server_catalog_architecture, it)) }
+                    Text(stringResource(R.string.server_catalog_availability), style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.server_catalog_capacity_caveat), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    value.availableLocations.sorted().forEach { code ->
+                        Text(stringResource(R.string.server_catalog_available, locationLabels[code] ?: code))
+                        locations.state.data?.firstOrNull { it.name == code }?.let { location ->
+                            if (changesAllowed) OutlinedButton(onClick = { onConfigure(value, location) },
+                                enabled = metadata.state.canOfferMutation && locations.state.canOfferMutation) {
+                                Text(stringResource(R.string.server_catalog_configure_server) + " · " + location.displayName())
+                            }
+                        }
+                    }
+                    CatalogConfigureAction(changesAllowed, { onConfigure(value, null) }, onOpenSettings, metadata.state.canOfferMutation)
+                } }
+            }
+            item { HCloudReadSection(locations) {} }
+            item {
+                Text(stringResource(R.string.server_catalog_prices), style = MaterialTheme.typography.titleMedium)
+                HCloudReadSection(prices) { value ->
+                    if (value.prices.isEmpty()) Text(stringResource(R.string.server_catalog_prices_empty))
+                    value.prices.sortedBy { it.location }.forEach { price ->
+                        Text(stringResource(R.string.server_catalog_price, locationLabels[price.location] ?: price.location,
+                            formatApiMoney(price.hourly.gross), formatApiMoney(price.monthly.gross), price.currency))
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable private fun LocationDetailScreen(
@@ -165,15 +239,27 @@ internal fun ServerCatalogScreen(
     onOpenSettings: () -> Unit,
     onBack: () -> Unit,
 ) {
-    var retry by remember(initial.id) { mutableIntStateOf(0) }; var state by remember(initial.id) { mutableStateOf<LocationDetailState>(LocationDetailState.Loading) }; val failure = stringResource(R.string.server_catalog_location_failed)
-    LaunchedEffect(initial.id, retry) { state = LocationDetailState.Loading; state = try { LocationDetailState.Content(withContext(Dispatchers.IO) { repository.getLocation(initial.id) }) } catch (cancelled: CancellationException) { throw cancelled } catch (error: Throwable) { LocationDetailState.Error(safeApiFailureMessage(error, failure)) } }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) { item { OutlinedButton(onClick = onBack) { Text(stringResource(R.string.common_back)) } }; when (val current = state) { LocationDetailState.Loading -> item { Text(stringResource(R.string.server_catalog_loading)) }; is LocationDetailState.Error -> item { Column { Text(current.message); OutlinedButton(onClick = { retry++ }) { Text(stringResource(R.string.common_retry)) } } }; is LocationDetailState.Content -> item { val value = current.value; Text(value.displayName(), style = MaterialTheme.typography.headlineMedium); Text(value.description); value.city?.let { Text(stringResource(R.string.server_catalog_city, it)) }; value.country?.let { Text(stringResource(R.string.server_catalog_country, it)) }; value.networkZone?.let { Text(stringResource(R.string.server_catalog_network_zone, it)) }; CatalogConfigureAction(changesAllowed, onConfigure, onOpenSettings) } } }
+    val scope = "${LocalOperationContext.current}:catalog:location:${initial.id}"
+    val detail = rememberSectionLoader(scope) { repository.getLocation(initial.id) }
+    HCloudPullToRefresh(detail.state.refreshing, detail::refresh, Modifier.fillMaxSize()) {
+        LazyColumn(state = rememberRestorableLazyListState(scope, contentReady = detail.state.data != null), modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            item { if (LocalNavigationChrome.current == null) OutlinedButton(onClick = onBack) { Text(stringResource(R.string.common_back)) } }
+            item { HCloudReadSection(detail) { value ->
+                if (LocalNavigationChrome.current == null) Text(value.displayName(), style = MaterialTheme.typography.headlineMedium)
+                Text(value.description)
+                value.city?.let { Text(stringResource(R.string.server_catalog_city, it)) }
+                value.country?.let { Text(stringResource(R.string.server_catalog_country, it)) }
+                value.networkZone?.let { Text(stringResource(R.string.server_catalog_network_zone, it)) }
+                CatalogConfigureAction(changesAllowed, onConfigure, onOpenSettings, detail.state.canOfferMutation)
+            } }
+        }
+    }
 }
 
 @Composable
-private fun CatalogConfigureAction(changesAllowed: Boolean, onConfigure: () -> Unit, onOpenSettings: () -> Unit) {
+private fun CatalogConfigureAction(changesAllowed: Boolean, onConfigure: () -> Unit, onOpenSettings: () -> Unit, fresh: Boolean = true) {
     if (changesAllowed) {
-        Button(onClick = onConfigure, modifier = Modifier.fillMaxWidth()) {
+        Button(onClick = onConfigure, enabled = fresh, modifier = Modifier.fillMaxWidth()) {
             Text(stringResource(R.string.server_catalog_configure_server))
         }
     } else {

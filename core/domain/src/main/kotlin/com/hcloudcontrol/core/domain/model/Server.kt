@@ -20,7 +20,17 @@ data class Server(
     val publicDnsPointers: List<DnsPointer> = emptyList(),
     /** Read-only interface and device metadata already returned by GET /servers/{id}. */
     val networkDevices: ServerNetworkDeviceInventory = ServerNetworkDeviceInventory(),
+    /** Actual retained boot disk from primary_disk_size, not the plan's nominal disk. */
+    val primaryDiskSizeGb: Double? = null,
+    val hardware: ServerHardware? = null,
+    val image: ServerImageInfo? = null,
+    val locationDetails: LocationDetails? = null,
 )
+
+data class ServerHardware(val cores: Int?, val memoryGb: Double?, val planDiskGb: Int?,
+    val architecture: String?, val storageType: String?, val cpuType: String?)
+data class ServerImageInfo(val id: Long, val name: String?, val description: String?,
+    val architecture: String?, val osFlavor: String?, val osVersion: String?)
 
 data class ServerNetworkDeviceInventory(
     val ipv4Address: String? = null,

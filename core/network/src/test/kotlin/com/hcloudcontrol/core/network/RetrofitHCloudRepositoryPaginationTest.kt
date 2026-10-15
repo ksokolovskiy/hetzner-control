@@ -269,13 +269,15 @@ class RetrofitHCloudRepositoryPaginationTest {
         val api = PagingApi()
         val updated = RetrofitHCloudRepository(api).updateServerConfiguration(
             42,
-            ServerConfigurationPatch(name = "renamed", labels = emptyMap(), placementGroupId = 77),
+            ServerConfigurationPatch(name = "renamed", labels = emptyMap()),
         )
 
         assertEquals("renamed", updated.name)
         assertEquals("renamed", api.lastServerConfigurationPatch?.name)
         assertEquals(emptyMap<String, String>(), api.lastServerConfigurationPatch?.labels)
-        assertEquals(77L, api.lastServerConfigurationPatch?.placementGroupId)
+        assertTrue(runCatching {
+            RetrofitHCloudRepository(api).updateServerConfiguration(42, ServerConfigurationPatch(placementGroupId = 77))
+        }.exceptionOrNull() is IllegalArgumentException)
     }
 
     @Test
@@ -977,10 +979,14 @@ private class PagingApi : HCloudApi {
                 labels = request.labels,
             ),
             action = ActionDto(904, "running"),
+            nextActions = emptyList(),
         )
     }
 
-    override suspend fun deleteVolume(volumeId: Long): ActionResponse = volumeAction("delete", volumeId, 905)
+    override suspend fun deleteVolume(volumeId: Long): retrofit2.Response<Unit> {
+        volumeActionCalls += "delete" to volumeId
+        return retrofit2.Response.success<Unit>(204, null)
+    }
 
     override suspend fun changeVolumeProtection(volumeId: Long, patch: DeleteProtectionPatchDto): ActionResponse =
         volumeAction("change_protection", volumeId, 906)
@@ -1176,8 +1182,7 @@ private class PagingApi : HCloudApi {
         type = if (address.contains(':')) "ipv6" else "ipv4",
         ip = address,
         homeLocation = LocationDto(1, "fsn1-dc14"),
-        assigneeId = assigneeId,
-        assigneeType = assigneeType,
+        server = assigneeId,
         protection = FloatingIpProtectionDto(deleteProtected = true),
         labels = mapOf("environment" to "production"),
         dnsPointers = listOf(DnsPointerDto(address, if (assigneeId == null) null else "web.example.test")),
@@ -1298,9 +1303,9 @@ private class PagingApi : HCloudApi {
 
     override suspend fun getNetworkActions(networkId: Long, page: Int, perPage: Int): ActionsResponse = ActionsResponse(emptyList())
     override suspend fun createNetwork(request: CreateNetworkRequestDto): CreateNetworkResponse = error("unused")
-    override suspend fun deleteNetwork(networkId: Long): ActionResponse = error("unused")
+    override suspend fun deleteNetwork(networkId: Long): retrofit2.Response<Unit> = error("unused")
     override suspend fun addNetworkSubnet(networkId: Long, request: NetworkSubnetRequestDto): ActionResponse = error("unused")
-    override suspend fun deleteNetworkSubnet(networkId: Long, request: NetworkSubnetRequestDto): ActionResponse = error("unused")
+    override suspend fun deleteNetworkSubnet(networkId: Long, request: DeleteNetworkSubnetRequestDto): ActionResponse = error("unused")
     override suspend fun addNetworkRoute(networkId: Long, request: NetworkRouteRequestDto): ActionResponse = error("unused")
     override suspend fun deleteNetworkRoute(networkId: Long, request: NetworkRouteRequestDto): ActionResponse = error("unused")
     override suspend fun changeNetworkProtection(networkId: Long, patch: DeleteProtectionPatchDto): ActionResponse =
@@ -1444,8 +1449,7 @@ private class PagingApi : HCloudApi {
         return ActionResponse(ActionDto(821, "running"))
     }
 
-    override suspend fun removeServerFromPlacementGroup(serverId: Long, request: PlacementGroupRequestDto): ActionResponse {
-        lastPlacementGroupRequest = request
+    override suspend fun removeServerFromPlacementGroup(serverId: Long): ActionResponse {
         placementGroupActionCalls += "remove" to serverId
         return ActionResponse(ActionDto(822, "running"))
     }
@@ -1510,10 +1514,10 @@ private class PagingApi : HCloudApi {
         floatingIpActionCalls += "delete" to floatingIpId
     }
 
-    override suspend fun deleteServer(serverId: Long) = Unit
+    override suspend fun deleteServer(serverId: Long): ActionResponse = ActionResponse(ActionDto(902, "running"))
 
-    override suspend fun rebuildServer(serverId: Long, request: RebuildServerRequestDto): RootPasswordActionResponse =
-        RootPasswordActionResponse(ActionDto(901, "running"), "rebuild-once")
+    override suspend fun rebuildServer(serverId: Long, request: RebuildServerRequestDto): RebuildServerResponse =
+        RebuildServerResponse(ActionDto(901, "running"), "rebuild-once")
 
     override suspend fun createServer(request: CreateServerRequestDto): CreateServerResponse {
         createServerFailure?.let { throw it }

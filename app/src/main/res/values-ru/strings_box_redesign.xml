@@ -1,0 +1,6 @@
+<resources>
+    <string name="box_redesign_overview">Обзор</string>
+    <string name="box_redesign_access">Доступ</string>
+    <string name="box_redesign_read_only_access">Папки и сведения о субаккаунтах доступны только для просмотра. Файловый браузер, изменение пользователей, создание и удаление Storage Box здесь недоступны.</string>
+    <string name="box_snapshot_description_invalid">Не более 1000 латинских букв, цифр, пробелов или символов -_,:&lt;&gt;+#!()[]{}</string>
+</resources>

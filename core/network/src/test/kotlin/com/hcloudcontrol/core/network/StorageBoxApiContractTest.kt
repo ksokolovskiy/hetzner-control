@@ -9,6 +9,22 @@ import org.junit.Assert.assertFalse
 import org.junit.Test
 
 class StorageBoxApiContractTest {
+    @Test fun `original snapshot action status uses documented Storage Box action endpoint`() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody("""{"action":{"id":99,"status":"success","command":"create_snapshot","progress":100}}"""))
+            val fixtureToken = "fixture-token"
+            val repository = RetrofitStorageBoxRepository(StorageBoxApiFactory.create(
+                tokenProvider = { fixtureToken }, baseUrl = server.url("/v1/").toString()))
+            val result = repository.getStorageBoxAction(99)
+            assertEquals(99L, result.id)
+            assertEquals("success", result.status)
+            val request = server.takeRequest()
+            assertEquals("GET", request.method)
+            assertEquals("/v1/storage_boxes/actions/99", request.path)
+            assertEquals("Bearer $fixtureToken", request.getHeader("Authorization"))
+            assertEquals(1, server.requestCount)
+        }
+    }
     @Test
     fun `list uses separate bearer credential and follows api pagination`() = runBlocking {
         MockWebServer().use { server ->

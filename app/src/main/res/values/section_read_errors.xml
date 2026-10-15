@@ -1,0 +1,4 @@
+<resources>
+    <string name="ds_authentication">The credential is invalid or has been revoked. Reconnect to verify access.</string>
+    <string name="ds_offline">Could not reach the service. Check your connection and retry this read.</string>
+</resources>

@@ -1,0 +1,22 @@
+<resources>
+    <string name="s3_pending_operation">Ожидающая S3-операция — открыть исходный результат</string>
+    <string name="s3_profile_change_failed">Не удалось подтвердить изменение сохранённого S3-профиля. Проверьте локальные настройки подключения и повторите попытку.</string>
+    <string name="s3_original_connection_unavailable_title">Исходное S3-подключение недоступно</string>
+    <string name="s3_original_connection_unavailable">Ожидающая операция сохранена с исходным ID подключения и адресом. Подключение удалено или изменено. Проверить результат через другой профиль нельзя; операция не будет повторена или привязана к нему.</string>
+    <string name="s3_precondition_changed">Подключение или ресурс изменились. Обновите данные и проверьте действие заново.</string>
+    <string name="s3_effect">Результат действия</string>
+    <string name="s3_profiles_title">Подключения S3</string>
+    <string name="s3_selected">Выбранное подключение</string>
+    <string name="s3_select">Выбрать подключение</string>
+    <string name="s3_review">Проверить действие</string>
+    <string name="s3_invalid_name">Введите корректное имя S3 bucket (3–63 строчных буквы, цифры, точки или дефисы).</string>
+    <string name="s3_remove_local_only">Удалить %1$s только с этого устройства? Ключи, buckets и объекты у провайдера сохранятся.</string>
+    <string name="s3_pending_reauthentication">Исходная операция остаётся в истории. Для проверки статуса нужно исходное подключение S3.</string>
+    <string name="s3_operation_result">Операция S3</string>
+    <string name="s3_connection_check_failed">Не удалось проверить или безопасно сохранить подключение. Проверьте ключи, локацию и сеть.</string>
+    <string name="s3_show_access">Показать access key</string>
+    <string name="s3_hide_access">Скрыть access key</string>
+    <string name="s3_show_secret">Показать secret key</string>
+    <string name="s3_hide_secret">Скрыть secret key</string>
+    <string name="s3_checking_connection">Проверка подключения S3 перед сохранением…</string>
+</resources>

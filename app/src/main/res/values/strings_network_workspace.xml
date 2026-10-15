@@ -1,0 +1,29 @@
+<resources>
+    <string name="network_ip_review_assignment">Server assignment</string>
+    <string name="network_ip_protection_unknown">Deletion protection is unknown</string>
+    <string name="network_ip_reason_assigned">This Primary IP is already assigned.</string>
+    <string name="network_ip_reason_unknown_location">Location could not be verified.</string>
+    <string name="network_ip_reason_location">A server in the same location is required.</string>
+    <string name="network_ip_reason_power">The server must be powered off.</string>
+    <string name="network_ip_reason_family">The server already has a Primary IP of this address family.</string>
+    <string name="network_ip_reason_missing_primary">A Primary IP of the same address family is required.</string>
+    <string name="network_ip_reason_unknown_zone">Network zone could not be verified.</string>
+    <string name="network_ip_reason_zone">A server in the same network zone is required.</string>
+    <string name="network_ip_reason_assignee">This assignment type is not supported here.</string>
+    <string name="network_ip_create_risk">I understand this creates a billable Primary IP. The exact cost is not available here.</string>
+    <string name="network_ip_assign">Assign to server</string>
+    <string name="network_ip_unassign">Unassign from server</string>
+    <string name="network_ip_delete">Delete IP</string>
+    <string name="network_ip_mutation_risk">I understand this can interrupt public network connectivity. No protection or assignment will be changed automatically.</string>
+    <string name="network_ptr_title">Reverse DNS</string>
+    <string name="network_ptr_reset">Empty means reset to the provider default (dns_ptr: null).</string>
+    <string name="network_ptr_risk">I understand this changes reverse DNS for the selected address.</string>
+    <string name="network_ptr_invalid">Enter a hostname without a trailing dot, URL or IP address.</string>
+    <string name="network_ptr_review_failed">The resource changed or could not be verified. Refresh and review again.</string>
+    <string name="network_public_ips">Public IPs</string>
+    <string name="network_search_categories">Find a network resource</string>
+    <string name="network_public_counts">%1$s Primary IP · %2$s Floating IP</string>
+    <string name="network_resource_count">%1$d resources</string>
+    <string name="network_search_public_ips">Search by name, address or server</string>
+    <string name="network_floating_scope_note">Primary IPs can be created here. Floating IPs can be managed but not created in this version.</string>
+</resources>

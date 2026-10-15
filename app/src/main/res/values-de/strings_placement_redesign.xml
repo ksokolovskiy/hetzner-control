@@ -1,0 +1,5 @@
+<resources>
+    <string name="placement_groups_name_required">Namen der Platzierungsgruppe eingeben.</string>
+    <string name="placement_groups_metadata_note">Metadaten ändern keine Mitgliedschaften. Mitgliedervorgänge werden separat geprüft. Das Löschen einer Gruppe löscht nicht ihre Server.</string>
+    <string name="placement_groups_candidates_changed">Der ausgewählte Server ist nicht mehr geeignet. Wählen Sie einen anderen Server.</string>
+</resources>

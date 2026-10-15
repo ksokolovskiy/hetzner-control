@@ -31,72 +31,58 @@ import com.hcloudcontrol.core.domain.repository.HCloudRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
-
-private sealed interface VolumeDetailState {
-    data object Loading : VolumeDetailState
-    data class Content(val volume: VolumeInventory, val actions: List<CloudAction>) : VolumeDetailState
-    data class Error(val detailsFailed: Boolean, val historyFailed: Boolean) : VolumeDetailState
-}
+import com.hcloudcontrol.ui.navigation.*
 
 /**
  * Read-only detail route backed by the documented `GET /volumes/{id}` and
- * `GET /volumes/{id}/actions` endpoints. Mutations intentionally remain in the parent inventory.
+ * `GET /volumes/{id}/actions` endpoints. All lifecycle entry points share this canonical detail.
  */
 @Composable
-internal fun VolumeDetailScreen(initial: VolumeInventory, repository: HCloudRepository, onBack: () -> Unit) {
-    var refreshKey by remember(initial.id) { mutableStateOf(0) }
-    var state by remember(initial.id) { mutableStateOf<VolumeDetailState>(VolumeDetailState.Loading) }
-    LaunchedEffect(initial.id, refreshKey) {
-        state = VolumeDetailState.Loading
-        coroutineScope {
-            val detail = async(Dispatchers.IO) { runCatching { repository.getVolume(initial.id) } }
-            val history = async(Dispatchers.IO) { runCatching { repository.getVolumeActions(initial.id) } }
-            val detailResult = detail.await()
-            val historyResult = history.await()
-            state = if (detailResult.isSuccess && historyResult.isSuccess) {
-                VolumeDetailState.Content(detailResult.getOrThrow(), historyResult.getOrThrow())
-            } else {
-                VolumeDetailState.Error(detailResult.isFailure, historyResult.isFailure)
-            }
-        }
+internal fun VolumeDetailScreen(volumeId: Long, repository: HCloudRepository, onBack: () -> Unit) {
+    val key = LocalScrollProjectNamespace.current + ":volume:" + volumeId
+    val detail = com.hcloudcontrol.ui.state.rememberSectionLoader(key + ":metadata") { repository.getVolume(volumeId) }
+    val history = com.hcloudcontrol.ui.state.rememberSectionLoader(key + ":history", { it: List<CloudAction> -> it.isEmpty() }) {
+        repository.getVolumeActions(volumeId)
     }
+    val hosted = LocalNavigationChrome.current != null
+    RegisterResourceChildNavigation(RootDestination.STORAGE, ResourceType.VOLUME, volumeId.toString(),
+        detail.state.data?.name ?: stringResource(R.string.volume_detail_title), onBack)
+    HCloudPullToRefresh(detail.state.refreshing || history.state.refreshing,
+        onRefresh = { detail.refresh(); history.refresh() }, modifier = Modifier.fillMaxSize()) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
+        state = rememberRestorableLazyListState(key,
+            contentReady = detail.state.hasSuccessfulResponse &&
+                (history.state.hasSuccessfulResponse || history.state.error != null)),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        item { OutlinedButton(onClick = onBack) { Text(stringResource(R.string.common_back)) } }
-        item { Text(stringResource(R.string.volume_detail_title), style = MaterialTheme.typography.headlineMedium) }
-        when (val current = state) {
-            VolumeDetailState.Loading -> item { VolumeDetailLoading(stringResource(R.string.volume_detail_loading)) }
-            is VolumeDetailState.Error -> item {
-                val message = when {
-                    current.detailsFailed && current.historyFailed -> stringResource(R.string.volume_detail_load_error)
-                    current.detailsFailed -> stringResource(R.string.volume_detail_load_error)
-                    else -> stringResource(R.string.volume_action_history_load_error)
-                }
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(message, color = MaterialTheme.colorScheme.error)
-                    OutlinedButton(onClick = { refreshKey++ }) { Text(stringResource(R.string.common_retry)) }
-                }
-            }
-            is VolumeDetailState.Content -> {
-                item { VolumeDetailsCard(current.volume) }
-                item {
-                    ResourceProtectionControls(
-                        resourceName = current.volume.name,
-                        deleteProtected = current.volume.deleteProtected,
-                        repository = repository,
-                        onChange = { patch -> repository.changeVolumeProtection(current.volume.id, patch) },
-                        onCompleted = { refreshKey++ },
-                    )
-                }
-                item { VolumeActionHistory(actions = current.actions) }
+        if (!hosted) item { OutlinedButton(onClick = onBack) { Text(stringResource(R.string.common_back)) } }
+        if (!hosted) item { Text(stringResource(R.string.volume_detail_title), style = MaterialTheme.typography.titleLarge) }
+        item {
+            com.hcloudcontrol.ui.designsystem.HCloudReadSection(detail) { current ->
+                VolumeDetailsCard(current)
+                ResourceProtectionControls(
+                    resourceName = current.name,
+                    currentProtected = current.deleteProtected,
+                    currentKnown = current.protectionKnown,
+                    adapter = com.hcloudcontrol.operations.ProtectionAdapter(
+                        com.hcloudcontrol.operations.ProtectionResource.VOLUME, current.id,
+                        com.hcloudcontrol.operations.ProtectionField.DELETE, repository,
+                    ),
+                    onCompleted = { detail.refresh() },
+                    enabled = detail.state.canOfferMutation,
+                )
+                VolumeLifecycleControls(current, repository, detail.state.canOfferMutation,
+                    onCompleted = { detail.refresh(); history.refresh() }, onDeleted = onBack)
             }
         }
+        item {
+            com.hcloudcontrol.ui.designsystem.HCloudReadSection(history) { actions -> VolumeActionHistory(actions) }
+        }
+    }
     }
 }
-
 @Composable
 private fun VolumeDetailsCard(volume: VolumeInventory) = Card(
     Modifier.fillMaxWidth(),
@@ -116,7 +102,7 @@ private fun VolumeDetailsCard(volume: VolumeInventory) = Card(
         )
         VolumeDetailRow(
             stringResource(R.string.volume_detail_protection),
-            stringResource(if (volume.deleteProtected) R.string.common_protected_enabled else R.string.common_protected_disabled),
+            stringResource(if (!volume.protectionKnown) R.string.ds_cost_unknown else if (volume.deleteProtected) R.string.common_protected_enabled else R.string.common_protected_disabled),
         )
         if (volume.labels.isNotEmpty()) {
             VolumeDetailRow(stringResource(R.string.volume_detail_labels), volume.labels.toSortedMap().entries.joinToString { "${it.key}=${it.value}" })
@@ -126,9 +112,9 @@ private fun VolumeDetailsCard(volume: VolumeInventory) = Card(
 }
 
 @Composable
-private fun VolumeDetailRow(label: String, value: String) = Row(
+private fun VolumeDetailRow(label: String, value: String) = Column(
     Modifier.fillMaxWidth(),
-    horizontalArrangement = Arrangement.SpaceBetween,
+    verticalArrangement = Arrangement.spacedBy(4.dp),
 ) {
     Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant)
     Text(value, fontWeight = FontWeight.Medium)
@@ -155,13 +141,4 @@ private fun VolumeActionHistory(actions: List<CloudAction>) = Column(verticalArr
             }
         }
     }
-}
-
-@Composable
-private fun VolumeDetailLoading(message: String) = Row(
-    verticalAlignment = Alignment.CenterVertically,
-    horizontalArrangement = Arrangement.spacedBy(12.dp),
-) {
-    CircularProgressIndicator(Modifier.padding(2.dp))
-    Text(message, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }

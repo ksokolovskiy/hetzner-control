@@ -1,0 +1,5 @@
+<resources>
+    <string name="placement_groups_name_required">Введите имя группы размещения.</string>
+    <string name="placement_groups_metadata_note">Изменение метаданных не меняет состав группы. Операции с участниками проверяются отдельно. Удаление группы не удаляет её серверы.</string>
+    <string name="placement_groups_candidates_changed">Выбранный сервер больше не подходит. Выберите другой сервер.</string>
+</resources>

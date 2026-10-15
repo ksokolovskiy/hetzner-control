@@ -9,7 +9,12 @@ OBJECT_STORAGE_STORE="$PROJECT_DIR/core/security/src/main/kotlin/com/hcloudcontr
 OBJECT_STORAGE_UI="$PROJECT_DIR/app/src/main/kotlin/com/hcloudcontrol/ObjectStorageScreen.kt"
 OBJECT_STORAGE_CLIENT="$PROJECT_DIR/core/network/src/main/kotlin/com/hcloudcontrol/core/network/ObjectStorageS3Repository.kt"
 APP_ENTRY="$PROJECT_DIR/app/src/main/kotlin/com/hcloudcontrol/MainActivity.kt"
-PROVISIONING_UI="$PROJECT_DIR/app/src/main/kotlin/com/hcloudcontrol/ServerProvisioningScreen.kt"
+PROVISIONING_UI="$PROJECT_DIR/app/src/main/kotlin/com/hcloudcontrol/UnifiedProvisioningWizard.kt"
+PROVISIONING_HELPERS="$PROJECT_DIR/app/src/main/kotlin/com/hcloudcontrol/ServerProvisioningScreen.kt"
+RESIZE_UI="$PROJECT_DIR/app/src/main/kotlin/com/hcloudcontrol/UnifiedResizeServerScreen.kt"
+OPERATION_SESSION="$PROJECT_DIR/app/src/main/kotlin/com/hcloudcontrol/operations/OperationComposition.kt"
+OPERATION_PERSISTENCE="$PROJECT_DIR/app/src/main/kotlin/com/hcloudcontrol/operations/OperationPersistence.kt"
+OPERATION_SECRET="$PROJECT_DIR/app/src/main/kotlin/com/hcloudcontrol/operations/SecretResultDialog.kt"
 API_ERROR_MAPPER="$PROJECT_DIR/core/network/src/main/kotlin/com/hcloudcontrol/core/network/HCloudApiErrorMapper.kt"
 API_FAILURE="$PROJECT_DIR/core/domain/src/main/kotlin/com/hcloudcontrol/core/domain/model/HCloudApiFailure.kt"
 API_DIAGNOSTICS="$PROJECT_DIR/core/network/src/main/kotlin/com/hcloudcontrol/core/network/HCloudApiDiagnostics.kt"
@@ -25,7 +30,7 @@ require_literal() {
     rg -F -q "$literal" "$file" || fail "missing required contract in ${file#$PROJECT_DIR/}: $literal"
 }
 
-for file in "$SECURITY_STORE" "$STORAGE_BOX_STORE" "$OBJECT_STORAGE_STORE" "$OBJECT_STORAGE_UI" "$OBJECT_STORAGE_CLIENT" "$APP_ENTRY" "$PROVISIONING_UI" "$API_ERROR_MAPPER" "$API_FAILURE" "$API_DIAGNOSTICS"; do
+for file in "$SECURITY_STORE" "$STORAGE_BOX_STORE" "$OBJECT_STORAGE_STORE" "$OBJECT_STORAGE_UI" "$OBJECT_STORAGE_CLIENT" "$APP_ENTRY" "$PROVISIONING_UI" "$PROVISIONING_HELPERS" "$RESIZE_UI" "$OPERATION_SESSION" "$OPERATION_PERSISTENCE" "$OPERATION_SECRET" "$API_ERROR_MAPPER" "$API_FAILURE" "$API_DIAGNOSTICS"; do
     [ -f "$file" ] || fail "required source file is missing: ${file#$PROJECT_DIR/}"
 done
 
@@ -35,8 +40,11 @@ require_literal "$SECURITY_STORE" "MasterKey.Builder(context).setKeyScheme(Maste
 require_literal "$SECURITY_STORE" "EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV"
 require_literal "$SECURITY_STORE" "EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM"
 require_literal "$SECURITY_STORE" "fun tokenKey(connectionId: String)"
-require_literal "$SECURITY_STORE" ".putString(tokenKey(connection.id), token.trim())"
-require_literal "$SECURITY_STORE" ".remove(tokenKey(connectionId))"
+require_literal "$SECURITY_STORE" "putString(tokenKey(connection.id), token.trim())"
+require_literal "$SECURITY_STORE" "remove(tokenKey(connectionId))"
+require_literal "$SECURITY_STORE" "checkedPreferenceUpdate(preferences,"
+require_literal "$OBJECT_STORAGE_STORE" "checkedPreferenceUpdate(preferences,"
+require_literal "$PROJECT_DIR/core/security/src/main/kotlin/com/hcloudcontrol/core/security/CheckedPreferences.kt" "if (preferences.edit().apply(update).commit()) return"
 
 # Storage Box is a Cloud-project resource. A historical second credential remains
 # encrypted only for explicit removal and must never be returned or reused.
@@ -51,8 +59,10 @@ fi
 
 # The token provider may enter the network repository, but must not be read into
 # Compose UI state or a Text composable.
-require_literal "$APP_ENTRY" "HCloudRepositoryFactory.create(tokenStore::token)"
-require_literal "$APP_ENTRY" "StorageBoxRepositoryFactory.create(tokenStore::token)"
+require_literal "$APP_ENTRY" "ProjectApiClients(com.hcloudcontrol.connections.PinnedCloudConnection(tokenStore, owner))"
+require_literal "app/src/main/kotlin/com/hcloudcontrol/connections/ProjectApiClients.kt" "HCloudRepositoryFactory.create(binding::token)"
+require_literal "app/src/main/kotlin/com/hcloudcontrol/connections/ProjectApiClients.kt" "StorageBoxRepositoryFactory.create(binding::token)"
+require_literal "app/src/main/kotlin/com/hcloudcontrol/connections/ProjectApiClients.kt" "store.tokenForConnection(connection.id)"
 if rg -n -e 'tokenStore\.token\(\)' -e 'mutableStateOf\(tokenStore\.token' -e 'Text\([^)]*tokenStore\.token' "$APP_ENTRY"; then
     fail "active API token appears to cross into UI state or rendering"
 fi
@@ -76,7 +86,7 @@ fi
 if rg -n -i -e 'root_?password' "$SECURITY_STORE"; then
     fail "root password must not be persisted in the credential store"
 fi
-if rg -n -i -e 'rootPassword.*(putString|writeText|writeBytes|FileOutputStream|DataStore)' "$PROVISIONING_UI"; then
+if rg -n -i -e 'rootPassword.*(putString|writeText|writeBytes|FileOutputStream|DataStore)' "$PROVISIONING_UI" "$PROVISIONING_HELPERS" "$RESIZE_UI"; then
     fail "root password appears to be persisted by the provisioning UI"
 fi
 
@@ -84,13 +94,24 @@ fi
 # contain untrusted server text, so never render or assign a throwable message,
 # cause, or stack trace to the provisioning error state. The mapper's exception
 # message is also constrained to status/code, not the raw response body.
-require_literal "$PROVISIONING_UI" 'error = localizedCreateServerFailureMessage(throwable'
-require_literal "$PROVISIONING_UI" 'internal fun safeCreateServerFieldNames(fieldNames: List<String>): List<String>'
+require_literal "$PROVISIONING_UI" 'session.rejectOrUnknown(throwable)'
+require_literal "$RESIZE_UI" 'session.rejectOrUnknown(throwable)'
+require_literal "$PROVISIONING_UI" 'session.beginReviewed(proof, allowed, currentContext)'
+require_literal "$PROVISIONING_UI" 'OperationResultPresentation(record'
+require_literal "$PROVISIONING_UI" 'SecretResultDialog(secret)'
+require_literal "$PROVISIONING_HELPERS" 'internal fun safeCreateServerFieldNames(fieldNames: List<String>): List<String>'
+require_literal "$OPERATION_SESSION" '(throwable as? HCloudApiException)?.failure?.httpStatus'
+require_literal "$OPERATION_SESSION" 'current.stage == OperationStage.SENDING'
+require_literal "$OPERATION_SECRET" 'securePolicy = SecureFlagPolicy.SecureOn'
+require_literal "$OPERATION_SECRET" "chars.fill('\\u0000')"
+if rg -n -i -e 'writeUTF\([^)]*(rootPassword|password|token|secret)' -e '\.(message|cause|stackTrace)' "$OPERATION_PERSISTENCE" "$OPERATION_SESSION"; then
+    fail "operation persistence/error boundary may retain secret text or raw exception details"
+fi
 if rg -n -e 'error[[:space:]]*=[[:space:]]*(throwable|exception)(\.message|\.cause|\.stackTrace)?' \
-    -e 'InlineError\([^)]*(throwable|exception)' -e 'Text\([^)]*(throwable|exception)' "$PROVISIONING_UI"; then
+    -e 'InlineError\([^)]*(throwable|exception)' -e 'Text\([^)]*(throwable|exception)' "$PROVISIONING_UI" "$PROVISIONING_HELPERS" "$RESIZE_UI"; then
     fail "provisioning error UI appears to render exception details"
 fi
-if rg -n 'failure\.apiMessage' "$PROVISIONING_UI"; then
+if rg -n 'failure\.apiMessage' "$PROVISIONING_UI" "$PROVISIONING_HELPERS" "$RESIZE_UI"; then
     fail "untrusted API error text must not be rendered by the provisioning UI"
 fi
 require_literal "$API_FAILURE" '"Hetzner Cloud API request failed (HTTP ${failure.httpStatus}'

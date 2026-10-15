@@ -75,7 +75,7 @@ class PlacementGroupApiContractTest {
             assertEquals("{\"placement_group\":1001}", add.body.readUtf8())
             assertEquals("POST", remove.method)
             assertEquals("/v1/servers/42/actions/remove_from_placement_group", remove.path)
-            assertEquals("{\"placement_group\":1001}", remove.body.readUtf8())
+            assertEquals("", remove.body.readUtf8())
             listOf(detail, add, remove).forEach { request ->
                 assertEquals("Bearer $cloudToken", request.getHeader("Authorization"))
                 assertFalse(request.toString().contains(nonCloudToken))

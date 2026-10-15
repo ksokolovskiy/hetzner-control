@@ -25,141 +25,144 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import com.hcloudcontrol.core.domain.model.CloudAction
 import com.hcloudcontrol.core.domain.model.EnableRescueSpec
 import com.hcloudcontrol.core.domain.model.Server
 import com.hcloudcontrol.core.domain.repository.HCloudRepository
 import com.hcloudcontrol.core.domain.usecase.ServerRecoveryUseCase
-import kotlinx.coroutines.delay
+import com.hcloudcontrol.operations.SecretResult
+import com.hcloudcontrol.operations.SecretResultDialog
+import com.hcloudcontrol.operations.consumeSecretResult
+import com.hcloudcontrol.operations.LocalOperationContext
+import com.hcloudcontrol.operations.OperationStage
+import com.hcloudcontrol.operations.rememberOperationSession
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.saveable.rememberSaveable
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 internal enum class ServerRecoveryOperation { RESET_ROOT_PASSWORD, ENABLE_RESCUE, DISABLE_RESCUE }
 
-private enum class RecoveryExecutionState { CONFIRMING, SUBMITTING, WAITING, COMPLETE, ERROR }
-
-/**
- * All recovery secrets remain in composition memory only. The source OneTimeRootPassword is consumed
- * immediately and neither it nor its value is logged, stored, saved in state, or sent to navigation.
- */
+/** Recovery uses the same journal/review/result lifecycle; passwords never leave transient memory. */
 @Composable
-internal fun ServerRecoveryDialog(
-    server: Server,
-    operation: ServerRecoveryOperation,
-    repository: HCloudRepository,
-    onDismiss: () -> Unit,
-    onActionCompleted: () -> Unit,
-) {
-    var executionState by remember(server.id, operation) { mutableStateOf(RecoveryExecutionState.CONFIRMING) }
-    var progressStatus by remember(server.id, operation) { mutableStateOf<String?>(null) }
-    var error by remember(server.id, operation) { mutableStateOf<String?>(null) }
-    var revealedPassword by remember(server.id, operation) { mutableStateOf<String?>(null) }
-    var passwordAcknowledged by remember(server.id, operation) { mutableStateOf(false) }
+internal fun ServerRecoveryDialog(server: Server, operation: ServerRecoveryOperation,
+    repository: HCloudRepository, onDismiss: () -> Unit, onActionCompleted: () -> Unit) {
+    val originalServer = remember(LocalOperationContext.current, server.id, operation) { server }
+    val session = rememberOperationSession("server", originalServer.id.toString(), operation.name.lowercase(), originalServer.hashCode().toLong() and 0xffffffffL)
+    val currentContext by rememberUpdatedState(LocalOperationContext.current)
+    val allowed by rememberUpdatedState(LocalHighImpactOperations.current.isAllowed)
+    var busy by remember(session) { mutableStateOf(false) }
+    var tick by remember(session) { mutableStateOf(0) }
+    var error by remember(session) { mutableStateOf(false) }
+    var review by remember(session) { mutableStateOf<com.hcloudcontrol.operations.OperationReviewContent?>(null) }
+    var secretResult by remember(session) { mutableStateOf<SecretResult?>(null) }
+    var secretDismissed by remember(session) { mutableStateOf(false) }
+    val record = remember(session, busy, tick) { session.record }
+    val title = recoveryTitle(operation)
+    val description = recoveryDescription(operation, originalServer.name)
+    val warning = stringResource(R.string.server_recovery_confirmation_warning)
     val scope = rememberCoroutineScope()
-    val recovery = remember(repository) { ServerRecoveryUseCase(repository) }
-    val clipboard = LocalClipboardManager.current
-    val actionFailed = stringResource(R.string.server_recovery_action_failed)
-
-    fun execute() {
-        executionState = RecoveryExecutionState.SUBMITTING
-        error = null
+    val androidContext = androidx.compose.ui.platform.LocalContext.current
+    DisposableEffect(session) { onDispose { secretResult?.close() } }
+    fun refresh() { scope.launch {
+        com.hcloudcontrol.operations.refreshOperationResource(session) {
+            check(currentContext == session.context)
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { repository.getServer(originalServer.id) }
+            check(currentContext == session.context)
+            onActionCompleted()
+        }
+        tick++
+    } }
+    fun reconcile() {
+        if (busy || currentContext != session.context) return
+        busy = true
         scope.launch {
             try {
-                val action = when (operation) {
-                    ServerRecoveryOperation.RESET_ROOT_PASSWORD -> {
-                        val result = recovery.resetRootPassword(server.id)
-                        // revealOnce() is deliberately called exactly once; the String stays only in this dialog memory.
-                        revealedPassword = result.password.revealOnce()
-                        result.action
-                    }
-                    ServerRecoveryOperation.ENABLE_RESCUE -> {
-                        val result = recovery.enableRescue(server.id, EnableRescueSpec())
-                        revealedPassword = result.password.revealOnce()
-                        result.action
-                    }
-                    ServerRecoveryOperation.DISABLE_RESCUE -> recovery.disableRescue(server.id)
-                }
-                executionState = RecoveryExecutionState.WAITING
-                val succeeded = awaitRecoveryAction(repository, action) { status -> progressStatus = status }
-                if (succeeded) {
-                    executionState = RecoveryExecutionState.COMPLETE
-                    onActionCompleted()
-                } else {
-                    executionState = RecoveryExecutionState.ERROR
-                    error = actionFailed
-                }
-            } catch (_: Throwable) {
-                executionState = RecoveryExecutionState.ERROR
-                error = actionFailed
-            }
+                if (session.record?.originalActionIds?.isNotEmpty() == true)
+                    com.hcloudcontrol.operations.awaitOriginalOperationActions(session, repository)
+                else session.unknownIfPending()
+                if (session.record?.stage == OperationStage.SUCCEEDED) refresh()
+            } catch (cancelled: CancellationException) { session.unknownIfPending(); throw cancelled }
+            catch (_: Throwable) { session.unknownIfPending(); error = true }
+            finally { busy = false; tick++ }
         }
     }
-
-    val secretMustBeAcknowledged = revealedPassword != null
-    AlertDialog(
-        onDismissRequest = {
-            if (executionState != RecoveryExecutionState.SUBMITTING && executionState != RecoveryExecutionState.WAITING && (!secretMustBeAcknowledged || passwordAcknowledged)) onDismiss()
-        },
-        title = { Text(recoveryTitle(operation)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(recoveryDescription(operation, server.name))
-                if (executionState == RecoveryExecutionState.CONFIRMING) {
-                    Text(stringResource(R.string.server_recovery_confirmation_warning), color = MaterialTheme.colorScheme.error)
+    if (record?.stage == OperationStage.SUCCEEDED && record.secretIssued && !secretDismissed) {
+        SecretResultDialog(secretResult) {
+            secretResult = null; secretDismissed = true
+            refresh()
+        }
+        return
+    }
+    if (record != null) {
+        com.hcloudcontrol.operations.OperationResultDialog(title, record, record.intent.resource.context.connectionId,
+            originalServer.name, onClose = onDismiss, busy = busy, session = session,
+            onCheckStatus = if (record.isPending) ::reconcile else null, onRefreshResource = ::refresh)
+        return
+    }
+    review?.let { model ->
+        com.hcloudcontrol.operations.OperationReviewDialog(model, onConfirm = { proof ->
+            if (!busy) {
+                busy = true; error = false
+                scope.launch {
+                    try {
+                        val fresh = repository.getServer(originalServer.id)
+                        check(fresh.name == originalServer.name && fresh.protection == originalServer.protection && fresh.status == originalServer.status)
+                        check(operation != ServerRecoveryOperation.RESET_ROOT_PASSWORD || fresh.status == com.hcloudcontrol.core.domain.model.ServerStatus.RUNNING)
+                        session.beginReviewed(proof, allowed, currentContext)
+                        tick++
+                        check(allowed && currentContext == session.context)
+                        val action: CloudAction
+                        var issued = false
+                        when (operation) {
+                            ServerRecoveryOperation.RESET_ROOT_PASSWORD -> {
+                                val response = repository.resetRootPassword(originalServer.id)
+                                action = response.action; issued = true
+                                secretResult = consumeSecretResult(response.password)
+                            }
+                            ServerRecoveryOperation.ENABLE_RESCUE -> {
+                                val response = repository.enableRescue(originalServer.id, EnableRescueSpec())
+                                action = response.action; issued = true
+                                secretResult = consumeSecretResult(response.password)
+                            }
+                            ServerRecoveryOperation.DISABLE_RESCUE -> action = repository.disableRescue(originalServer.id)
+                        }
+                        session.acceptedActions(listOf(action), null, issued)
+                        session.observeOriginalAction(action); tick++
+                        if (session.record?.isPending == true) com.hcloudcontrol.operations.awaitOriginalOperationActions(session, repository, listOf(action))
+                        if (session.record?.stage == OperationStage.SUCCEEDED) refresh()
+                    } catch (cancelled: CancellationException) { session.unknownIfPending(); throw cancelled }
+                    catch (failure: Throwable) { session.rejectOrUnknown(failure); error = true; if (session.record == null) review = null }
+                    finally { busy = false; tick++ }
                 }
-                if (executionState == RecoveryExecutionState.SUBMITTING || executionState == RecoveryExecutionState.WAITING) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator()
-                        Spacer(Modifier.width(12.dp))
-                        Text(progressStatus ?: stringResource(R.string.server_recovery_submitting))
-                    }
-                }
-                revealedPassword?.let { password ->
-                    Text(stringResource(R.string.server_recovery_password_title), style = MaterialTheme.typography.titleMedium)
-                    Text(stringResource(R.string.server_recovery_password_warning), color = MaterialTheme.colorScheme.error)
-                    Text(password, style = MaterialTheme.typography.bodyLarge)
-                    OutlinedButton(onClick = { clipboard.setText(AnnotatedString(password)) }, modifier = Modifier.fillMaxWidth()) {
-                        Text(stringResource(R.string.server_recovery_copy_password))
-                    }
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { passwordAcknowledged = !passwordAcknowledged },
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Checkbox(checked = passwordAcknowledged, onCheckedChange = null)
-                        Text(stringResource(R.string.server_recovery_password_acknowledgement), modifier = Modifier.fillMaxWidth())
-                    }
-                }
-                if (executionState == RecoveryExecutionState.COMPLETE && revealedPassword == null) {
-                    Text(stringResource(R.string.server_recovery_complete), color = MaterialTheme.colorScheme.primary)
-                }
-                error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             }
-        },
-        confirmButton = {
-            when (executionState) {
-                RecoveryExecutionState.CONFIRMING -> Button(
-                    onClick = ::execute,
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error, contentColor = MaterialTheme.colorScheme.onError),
-                ) { Text(stringResource(R.string.server_recovery_confirm)) }
-                RecoveryExecutionState.ERROR -> Button(onClick = ::execute) { Text(stringResource(R.string.server_recovery_retry)) }
-                RecoveryExecutionState.COMPLETE -> Button(
-                    onClick = onDismiss,
-                    enabled = !secretMustBeAcknowledged || passwordAcknowledged,
-                ) { Text(stringResource(R.string.server_recovery_close)) }
-                RecoveryExecutionState.SUBMITTING, RecoveryExecutionState.WAITING -> Unit
-            }
-        },
-        dismissButton = {
-            if (executionState == RecoveryExecutionState.CONFIRMING || executionState == RecoveryExecutionState.ERROR) {
-                TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) }
-            }
-        },
-    )
+        }, onDismiss = { if (!busy) review = null }, submitEnabled = allowed && !busy)
+        return
+    }
+    com.hcloudcontrol.ui.designsystem.HCloudDialog(title, stringResource(R.string.ds_operation_confirm), {
+        if (!busy) { busy = true; error = false; scope.launch {
+            try {
+                val fresh = repository.getServer(originalServer.id)
+                check(fresh.name == originalServer.name && fresh.status == originalServer.status && fresh.protection == originalServer.protection)
+                check(operation != ServerRecoveryOperation.RESET_ROOT_PASSWORD || fresh.status == com.hcloudcontrol.core.domain.model.ServerStatus.RUNNING)
+                val intent = requireNotNull(session.intent)
+                review = com.hcloudcontrol.operations.OperationReviewContent(intent, System.currentTimeMillis(), title,
+                    intent.resource.context.connectionId, fresh.name,
+                    listOf(com.hcloudcontrol.operations.ReviewChange(title, androidContext.getString(serverStatusLabelResource(fresh.status)), description)),
+                    typedIdentity = fresh.name, acknowledgements = listOf(com.hcloudcontrol.operations.RiskAcknowledgement("recovery", warning)))
+            } catch (_: Throwable) { error = true }
+            finally { busy = false }
+        } }
+    }, { if (!busy) onDismiss() }, confirmEnabled = allowed && session.configured && !busy &&
+        (operation != ServerRecoveryOperation.RESET_ROOT_PASSWORD || originalServer.status == com.hcloudcontrol.core.domain.model.ServerStatus.RUNNING)) {
+        Text(description)
+        Text(warning, color = MaterialTheme.colorScheme.error)
+        if (busy) CircularProgressIndicator()
+        if (error) Text(stringResource(R.string.server_recovery_action_failed), color = MaterialTheme.colorScheme.error)
+    }
 }
 
 @Composable
@@ -179,21 +182,3 @@ private fun recoveryDescription(operation: ServerRecoveryOperation, serverName: 
         ServerRecoveryOperation.DISABLE_RESCUE -> R.string.server_recovery_disable_rescue_description
     }, serverName,
 )
-
-private suspend fun awaitRecoveryAction(
-    repository: HCloudRepository,
-    initial: CloudAction,
-    onStatus: (String) -> Unit,
-): Boolean {
-    var action = initial
-    repeat(120) {
-        onStatus(action.status)
-        when (action.status.lowercase()) {
-            "success" -> return true
-            "error" -> return false
-        }
-        delay(1_000)
-        action = repository.getAction(action.id)
-    }
-    return false
-}

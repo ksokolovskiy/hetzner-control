@@ -28,7 +28,7 @@
     <string name="onboarding_save_error">The connection could not be saved on this device. Try again.</string>
     <string name="onboarding_test_server_connected">Test Server profile saved and opened</string>
     <string name="onboarding_project_connected">Cloud project saved and opened</string>
-    <string name="onboarding_scope_note">This app supports Hetzner Cloud, including read-only Cloud DNS, and Storage Box APIs. Robot, the legacy DNS Console, and other products are intentionally excluded.</string>
+    <string name="onboarding_scope_note">Cloud and Storage Box management use the project API token. Object Storage bucket management uses separate S3 credentials. Cloud DNS is read-only. Server and Storage Box file contents, Robot and legacy DNS Console are not supported.</string>
     <string name="storage_boxes_title">Storage Boxes</string>
     <string name="storage_boxes_add_connection">Add connection</string>
     <string name="storage_boxes_separate_credentials">Storage Box uses a separate API credential. Your Hetzner Cloud token is never reused.</string>
@@ -127,9 +127,9 @@
     <string name="power_confirmation_title">%1$s: %2$s</string>
     <string name="power_destructive_warning">Warning: this operation can be destructive.</string>
     <string name="power_read_only">Your token is read-only. Power controls are unavailable.</string>
-    <string name="storage_enable_backups_warning">Automatic backups are a paid feature. Hetzner will assign a backup window after the action finishes.</string>
-    <string name="storage_disable_backups_warning">New automatic backups will no longer be created. This does not delete the server, snapshots, or other resources.</string>
-    <string name="storage_create_snapshot_warning">A snapshot is created as a separate image and may be billed. The server and existing images will not be deleted.</string>
+    <string name="storage_enable_backups_warning" formatted="false">Automatic daily backups add 20% to the server price and provide seven backup slots. Hetzner assigns the backup window.</string>
+    <string name="storage_disable_backups_warning">This immediately and permanently deletes ALL existing automatic backups for this server and disables future backups. The server and standalone snapshots are not deleted.</string>
+    <string name="storage_create_snapshot_warning">A standalone snapshot is billed per GB of stored image data. If the server is running, ensure disk consistency; shutting it down first is recommended. The server and existing images are not deleted.</string>
     <string name="snapshot_description_label">Snapshot description</string>
     <string name="snapshot_description_example">For example, before updating the application</string>
     <string name="provision_title">New server</string>
@@ -1121,4 +1121,21 @@
     <string name="object_storage_delete_confirm">Permanently delete bucket</string>
     <string name="object_storage_bucket_not_empty">The bucket is not empty. Remove objects in a dedicated S3 client first.</string>
     <string name="object_storage_request_failed">Object Storage could not complete this request. Check the selected endpoint and S3 credentials, then try again.</string>
+    <string name="operation_secret_lost">This one-time secret is no longer available. The operation will not be repeated. Use the provider’s recovery procedure if needed.</string>
+    <string name="operation_outcome_unknown">The outcome is not confirmed. Check the original operation status; submitting the change again could duplicate it.</string>
+    <string name="operation_check_status">Check status</string>
+    <string name="operation_copy_failed">The password could not be copied. Reveal it and save it securely.</string>
+    <string name="wizard_resources">1 Resources</string>
+    <string name="wizard_access">2 Access</string>
+    <string name="wizard_review">3 Review</string>
+    <string name="wizard_next_access">Next: access and network</string>
+    <string name="wizard_unknown_cost_ack">I understand that the complete price is not confirmed and selected options may incur additional charges.</string>
+    <string name="wizard_resize_cost_ack">I understand that resizing changes the server’s charges.</string>
+    <string name="wizard_safe_draft">This draft is saved in the form. No resources have been created and no request has been submitted.</string>
+    <string name="wizard_compatibility_reset">An incompatible image, type or location was cleared. Compatible selections and the server name were kept.</string>
+    <string name="wizard_unavailable_selection">A selected type, image, location or SSH key is no longer available. Its selection was cleared. Choose a replacement below; the server name and other compatible choices were kept.</string>
+    <string name="server_catalog_capacity_caveat">Listed availability does not guarantee free capacity. Availability is checked again before creation.</string>
+    <string name="wizard_select">Select</string>
+    <string name="wizard_search_types">Search configurations</string>
+    <string name="wizard_server_rate">Server type rate</string>
 </resources>

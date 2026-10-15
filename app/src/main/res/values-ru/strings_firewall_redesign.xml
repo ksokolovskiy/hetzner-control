@@ -1,0 +1,8 @@
+<resources>
+    <string name="firewall_redesign_targets">Подключённые ресурсы</string>
+    <string name="firewall_redesign_attached_delete">API не позволяет удалить подключённый firewall. Сначала отдельно снимите подключения, проверив влияние на защиту. Автоматического отключения нет.</string>
+    <string name="firewall_redesign_broad">Источник /0 разрешает этот TCP-трафик с любых адресов соответствующего семейства IP. Дополнительный источник IPv6 не добавляется.</string>
+    <string name="firewall_redesign_validation">Укажите TCP-порт (1–65535) и корректные IP-адреса или CIDR. Описание — не более 255 символов.</string>
+    <string name="firewall_redesign_failed">Не удалось подтвердить операцию. Обновите исходный ресурс и проверьте результат; не повторяйте запрос с неизвестным исходом.</string>
+    <string name="firewall_redesign_rule_readonly">Существующие правила доступны только для чтения. Можно только добавить входящий TCP; все прежние правила сохраняются.</string>
+</resources>

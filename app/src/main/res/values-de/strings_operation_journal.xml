@@ -1,0 +1,4 @@
+<resources>
+    <string name="operation_journal_unavailable_title">Vorgangsverlauf nicht verfügbar</string>
+    <string name="operation_journal_unavailable_message">Der gespeicherte Vorgangsverlauf konnte nicht gelesen werden. Die Ansicht bleibt verfügbar; Änderungen sind deaktiviert, damit ein Vorgang mit unbekanntem Ergebnis nicht wiederholt wird. Starten Sie die App zum erneuten Lesen neu.</string>
+</resources>

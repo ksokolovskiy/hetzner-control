@@ -1,0 +1,12 @@
+<resources>
+    <string name="server_detail_actions">Действия</string>
+    <string name="server_iso_details_label">Сведения об ISO</string>
+    <string name="server_rebuild_no_password">Hetzner не вернул новый root-пароль для этой успешно завершённой переустановки.</string>
+    <string name="server_detail_cpu">vCPU</string>
+    <string name="server_detail_memory">Память, ГиБ</string>
+    <string name="server_detail_architecture">Архитектура</string>
+    <string name="server_detail_cpu_type">Тип CPU</string>
+    <string name="server_detail_storage_type">Тип хранилища</string>
+    <string name="server_detail_actual_disk">Фактический основной диск, ГБ</string>
+    <string name="server_detail_image">Образ операционной системы</string>
+</resources>

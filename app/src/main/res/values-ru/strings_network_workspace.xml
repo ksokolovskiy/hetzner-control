@@ -1,0 +1,29 @@
+<resources>
+    <string name="network_ip_review_assignment">Назначение серверу</string>
+    <string name="network_ip_protection_unknown">Состояние защиты от удаления неизвестно</string>
+    <string name="network_ip_reason_assigned">Этот Primary IP уже назначен.</string>
+    <string name="network_ip_reason_unknown_location">Не удалось проверить локацию.</string>
+    <string name="network_ip_reason_location">Нужен сервер в той же локации.</string>
+    <string name="network_ip_reason_power">Сервер должен быть выключен.</string>
+    <string name="network_ip_reason_family">У сервера уже есть Primary IP этого семейства адресов.</string>
+    <string name="network_ip_reason_missing_primary">Нужен Primary IP того же семейства адресов.</string>
+    <string name="network_ip_reason_unknown_zone">Не удалось проверить сетевую зону.</string>
+    <string name="network_ip_reason_zone">Нужен сервер в той же сетевой зоне.</string>
+    <string name="network_ip_reason_assignee">Этот тип назначения здесь не поддерживается.</string>
+    <string name="network_ip_create_risk">Я понимаю, что создаётся платный Primary IP. Точная стоимость здесь недоступна.</string>
+    <string name="network_ip_assign">Назначить серверу</string>
+    <string name="network_ip_unassign">Отсоединить от сервера</string>
+    <string name="network_ip_delete">Удалить IP</string>
+    <string name="network_ip_mutation_risk">Я понимаю, что это может прервать сетевой доступ. Защита и назначение не будут изменены автоматически.</string>
+    <string name="network_ptr_title">Обратная DNS-запись</string>
+    <string name="network_ptr_reset">Пустое значение сбрасывает запись к значению провайдера (dns_ptr: null).</string>
+    <string name="network_ptr_risk">Я понимаю, что обратная DNS-запись выбранного адреса изменится.</string>
+    <string name="network_ptr_invalid">Введите имя хоста без точки в конце, URL или IP-адреса.</string>
+    <string name="network_ptr_review_failed">Ресурс изменился или его не удалось проверить. Обновите и подтвердите заново.</string>
+    <string name="network_public_ips">Публичные IP-адреса</string>
+    <string name="network_search_categories">Найти сетевой ресурс</string>
+    <string name="network_public_counts">%1$s Primary IP · %2$s Floating IP</string>
+    <string name="network_resource_count">Ресурсов: %1$d</string>
+    <string name="network_search_public_ips">Поиск по имени, адресу или серверу</string>
+    <string name="network_floating_scope_note">Здесь можно создавать Primary IP. Floating IP доступны для управления, но не создания в этой версии.</string>
+</resources>

@@ -1,0 +1,8 @@
+<resources>
+    <string name="more_group_resources">Speicher und Images</string>
+    <string name="more_group_network">Netzwerkdienste</string>
+    <string name="more_group_access">Zugriff</string>
+    <string name="more_group_application">Anwendung und Projekt</string>
+    <string name="more_group_cloud_resources">Cloud-Ressourcen</string>
+    <string name="more_group_products">Separate Produkte</string>
+</resources>

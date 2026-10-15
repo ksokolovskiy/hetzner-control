@@ -25,6 +25,8 @@ import retrofit2.http.Query
 
 /** API surface intentionally separate from HCloudApi: it has another host but uses the active project token. */
 internal interface StorageBoxApi {
+    @GET("storage_boxes/actions/{id}")
+    suspend fun getStorageBoxAction(@retrofit2.http.Path("id") actionId: Long): StorageBoxActionResponse
     @GET("storage_boxes")
     suspend fun getStorageBoxes(
         @Query("page") page: Int = 1,
@@ -92,6 +94,7 @@ internal data class CreateStorageBoxSnapshotResponse(
     val snapshot: StorageBoxSnapshotDto,
     val action: StorageBoxActionDto,
 )
+internal data class StorageBoxActionResponse(val action: StorageBoxActionDto)
 internal data class StorageBoxSubaccountsResponse(
     @Json(name = "subaccounts") val subaccounts: List<StorageBoxSubaccountDto>,
     val meta: StorageBoxMetaDto? = null,
@@ -155,6 +158,12 @@ internal data class StorageBoxSubaccountDto(
 )
 
 internal class RetrofitStorageBoxRepository(private val api: StorageBoxApi) : StorageBoxRepository {
+    override suspend fun getStorageBoxAction(actionId: Long): CloudAction = safeHCloudApiCall {
+        require(actionId > 0)
+        val action = api.getStorageBoxAction(actionId).action
+        check(action.id == actionId)
+        action.toDomain()
+    }
     override suspend fun getStorageBoxes(): List<StorageBox> = safeHCloudApiCall {
         val result = mutableListOf<StorageBox>()
         var page = 1
@@ -252,6 +261,7 @@ internal fun StorageBoxSubaccountDto.toDomain() = StorageBoxSubaccount(
 )
 
 object StorageBoxRepositoryFactory {
+    const val API_BASE_URL: String = StorageBoxApiFactory.BASE_URL
     fun create(tokenProvider: () -> String?): StorageBoxRepository =
         RetrofitStorageBoxRepository(StorageBoxApiFactory.create(tokenProvider))
 }

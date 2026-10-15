@@ -1,0 +1,7 @@
+<resources>
+    <string name="connection_checking">Verbindung wird geprüft…</string>
+    <string name="connection_check_offline">Keine Verbindung. Prüfen Sie das Netzwerk und versuchen Sie es erneut.</string>
+    <string name="connection_check_invalid_token">Das API-Token ist ungültig oder widerrufen. Prüfen Sie das Token.</string>
+    <string name="connection_check_denied">Das Token hat keinen Zugriff auf die angeforderten Ressourcen.</string>
+    <string name="connection_check_service">Die Verbindung konnte nicht geprüft werden. Versuchen Sie es später erneut.</string>
+</resources>

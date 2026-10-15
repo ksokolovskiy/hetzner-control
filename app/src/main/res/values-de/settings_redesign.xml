@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_group_application">Anwendung</string>
+    <string name="settings_group_safety">Sicherheit</string>
+    <string name="settings_group_projects">Projekte</string>
+    <string name="settings_all_connections">Alle Verbindungen</string>
+    <string name="settings_search_connections">Verbindungen suchen</string>
+    <string name="settings_selected_connection">Ausgewählt</string>
+    <string name="settings_privacy_policy">Datenschutzerklärung</string>
+    <string name="settings_external_link">Offizielle externe Seite öffnen</string>
+    <string name="settings_profile_shared_scope">Cloud und Storage Box werden mit dem Cloud-API-Token dieses Projekts verwaltet. Object Storage verwendet eine separate S3-Verbindung.</string>
+    <string name="settings_profile_local_note">Das Entfernen der Verbindung löscht nur die Zugangsdaten auf diesem Gerät. Ressourcen und Token beim Anbieter bleiben erhalten. Widerrufen Sie den Token bei Bedarf in der Hetzner Console. Laufende Vorgänge behalten ihre ursprüngliche Identität; verbinden Sie sich erneut, um ihren Status zu prüfen.</string>
+    <string name="settings_global_gate_note">Diese Einstellung gilt für alle Projekte auf diesem Gerät. Sie gewährt keine API-Rechte und deaktiviert keinen Ressourcenschutz. Jeder Vorgang muss weiterhin separat geprüft werden.</string>
+    <string name="settings_risk_acknowledgement">Ich verstehe, dass Änderungen Kosten verursachen, Dienste unterbrechen oder Daten unwiderruflich löschen können.</string>
+    <string name="settings_connection_title">Verbindung %1$s</string>
+    <string name="settings_profile_selected_note">Für Cloud-Anfragen ausgewählt. Die Auswahl allein bestätigt keine API-Berechtigung.</string>
+    <string name="settings_profile_not_selected_note">Nicht ausgewählt. Das Anzeigen dieses Profils wechselt nicht das aktive Cloud-Projekt.</string>
+    <string name="settings_switch_to_project">Dieses Projekt verwenden</string>
+    <string name="settings_pending_operation_warning">Laufende Vorgänge oder unbekannte Ergebnisse: %1$d. Die ursprüngliche Projekt- und Ressourcenidentität bleibt erhalten. Für die Statusprüfung kann eine erneute Verbindung erforderlich sein.</string>
+    <string name="connection_safe_diagnostics">Diagnose: %1$s</string>
+    <string name="connection_official_console_help">Token in der offiziellen Hetzner Console erstellen oder widerrufen</string>
+</resources>

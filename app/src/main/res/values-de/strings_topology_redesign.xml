@@ -1,0 +1,15 @@
+<resources>
+    <string name="topology_overview">Übersicht</string>
+    <string name="topology_members">Verbundene Ressourcen</string>
+    <string name="topology_entries">Subnetze und Routen</string>
+    <string name="topology_history">Aktionsverlauf</string>
+    <string name="topology_invalid">Prüfen Sie die ausdrücklich eingegebenen Werte und aktualisieren Sie die Ressource vor der Bestätigung.</string>
+    <string name="topology_network_cidr_hint">Geben Sie einen ausgerichteten privaten RFC1918-IPv4-Bereich mit /24 oder größer ein. Kein Bereich ist vorausgewählt.</string>
+    <string name="topology_gateway_assigned">Die Cloud-API weist Subnetz-Gateways zu. Ein eigenes Gateway kann für ein Cloud-Subnetz nicht gesetzt werden.</string>
+    <string name="topology_validation_scope">Syntax- und Topologieprüfungen garantieren keine Kompatibilität oder Erreichbarkeit externer Infrastruktur.</string>
+    <string name="topology_delete_detaches">Beim Löschen dieses Netzwerks trennt der Anbieter verbundene Ressourcen automatisch. Prüfen Sie die vollständige Liste; die App sendet keine zusätzlichen Bereinigungsaktionen.</string>
+    <string name="topology_no_cloud_subnet">Fügen Sie vor dem Verbinden ein Cloud-Subnetz in der Netzwerkzone des Servers hinzu. Die API weist die Adresse zu.</string>
+    <string name="topology_pending">Ursprüngliche Aktion: %1$s</string>
+    <string name="topology_subnets">Subnetze</string>
+    <string name="topology_routes">Routen</string>
+</resources>

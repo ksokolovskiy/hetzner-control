@@ -7,6 +7,7 @@ import com.hcloudcontrol.core.domain.repository.ObjectStorageRepository
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import java.security.MessageDigest
 import java.time.Clock
 import java.time.Instant
@@ -17,7 +18,7 @@ import javax.crypto.spec.SecretKeySpec
 import org.xmlpull.v1.XmlPullParserFactory
 
 /** Safe error intentionally omits S3 XML, signatures, authorization and any credential material. */
-class ObjectStorageRequestException(val safeMessage: String) : Exception(safeMessage)
+class ObjectStorageRequestException(val safeMessage: String, val httpStatus: Int? = null) : Exception(safeMessage)
 class ObjectStorageBucketNotEmptyException : Exception("Bucket is not empty")
 
 /**
@@ -29,6 +30,7 @@ class ObjectStorageS3Repository(
     private val client: OkHttpClient = OkHttpClient(),
     private val clock: Clock = Clock.systemUTC(),
 ) : ObjectStorageRepository {
+    private val transport = client.newBuilder().addInterceptor(S3ApiDiagnosticsInterceptor()).build()
     override suspend fun listBuckets(): List<ObjectStorageBucket> = executeXml("GET", null, emptyMap()).let(::parseBuckets)
 
     override suspend fun createBucket(name: String) {
@@ -67,20 +69,20 @@ class ObjectStorageS3Repository(
         val signingKey = hmac(hmac(hmac(hmac("AWS4${credentials.secretKey}", shortDate), credentials.location.id), "s3"), "aws4_request")
         val signature = hmac(signingKey, stringToSign).joinToString("") { "%02x".format(it) }
         val authorization = "AWS4-HMAC-SHA256 Credential=${credentials.accessKey}/$scope, SignedHeaders=$signedHeaders, Signature=$signature"
-        val request = Request.Builder().url(url).method(method, null)
+        val request = Request.Builder().url(url).method(method, if (method == "PUT") ByteArray(0).toRequestBody() else null)
             .header("Host", host)
             .header("x-amz-content-sha256", payloadHash)
             .header("x-amz-date", amzDate)
             .header("Authorization", authorization)
             .build()
-        client.newCall(request).execute().use { response ->
+        transport.newCall(request).execute().use { response ->
             if (!response.isSuccessful) throw ObjectStorageRequestException(
                 when (response.code) {
                     401, 403 -> "Object Storage credentials were rejected"
                     404 -> "Object Storage bucket was not found"
                     409 -> "Bucket operation conflicts with its current state"
                     else -> "Object Storage request failed (${response.code})"
-                },
+                }, httpStatus = response.code,
             )
             return response.body?.string().orEmpty()
         }

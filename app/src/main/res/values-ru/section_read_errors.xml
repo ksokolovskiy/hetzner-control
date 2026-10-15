@@ -1,0 +1,4 @@
+<resources>
+    <string name="ds_authentication">Ключ недействителен или отозван. Подключитесь заново для проверки доступа.</string>
+    <string name="ds_offline">Не удалось связаться с сервисом. Проверьте соединение и повторите загрузку.</string>
+</resources>

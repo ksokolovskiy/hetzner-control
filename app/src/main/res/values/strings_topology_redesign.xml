@@ -1,0 +1,15 @@
+<resources>
+    <string name="topology_overview">Overview</string>
+    <string name="topology_members">Connected resources</string>
+    <string name="topology_entries">Subnets and routes</string>
+    <string name="topology_history">Action history</string>
+    <string name="topology_invalid">Check the explicitly entered values and refresh the resource before reviewing this change.</string>
+    <string name="topology_network_cidr_hint">Enter an aligned RFC1918 IPv4 range, /24 or larger. No range is preselected.</string>
+    <string name="topology_gateway_assigned">The Cloud API assigns subnet gateways. A custom gateway cannot be set for a Cloud subnet.</string>
+    <string name="topology_validation_scope">Syntax and topology checks do not guarantee compatibility or connectivity with external infrastructure.</string>
+    <string name="topology_delete_detaches">The provider automatically detaches connected resources when this network is deleted. Review every listed resource; this app never sends separate cleanup operations.</string>
+    <string name="topology_no_cloud_subnet">Add a Cloud subnet in the server’s network zone before attaching a server. Addresses are assigned by the API.</string>
+    <string name="topology_pending">Original operation: %1$s</string>
+    <string name="topology_subnets">Subnets</string>
+    <string name="topology_routes">Routes</string>
+</resources>

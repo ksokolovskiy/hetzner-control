@@ -1,0 +1,22 @@
+<resources>
+    <string name="s3_pending_operation">Offener S3-Vorgang — ursprüngliches Ergebnis öffnen</string>
+    <string name="s3_profile_change_failed">Die Änderung des gespeicherten S3-Profils konnte nicht bestätigt werden. Lokale Verbindungseinstellungen prüfen und erneut versuchen.</string>
+    <string name="s3_original_connection_unavailable_title">Ursprüngliche S3-Verbindung nicht verfügbar</string>
+    <string name="s3_original_connection_unavailable">Der offene Vorgang bleibt mit ursprünglicher Verbindungs-ID und Endpunkt gespeichert. Die Verbindung wurde entfernt oder geändert. Ein anderes Profil kann den Status nicht prüfen; der Vorgang wird weder wiederholt noch neu zugeordnet.</string>
+    <string name="s3_precondition_changed">Verbindung oder Ressource geändert. Aktualisieren und erneut prüfen.</string>
+    <string name="s3_effect">Auswirkung</string>
+    <string name="s3_profiles_title">S3-Verbindungen</string>
+    <string name="s3_selected">Ausgewählte Verbindung</string>
+    <string name="s3_select">Verbindung auswählen</string>
+    <string name="s3_review">Prüfen</string>
+    <string name="s3_invalid_name">Gültigen S3-Bucket-Namen eingeben (3–63 Kleinbuchstaben, Ziffern, Punkte oder Bindestriche).</string>
+    <string name="s3_remove_local_only">%1$s nur von diesem Gerät entfernen? Schlüssel, Buckets und Objekte beim Anbieter bleiben erhalten.</string>
+    <string name="s3_pending_reauthentication">Der ursprüngliche Vorgang bleibt im Verlauf. Zur Statusprüfung ist die ursprüngliche S3-Verbindung erforderlich.</string>
+    <string name="s3_operation_result">S3-Vorgang</string>
+    <string name="s3_connection_check_failed">Verbindung konnte nicht geprüft oder sicher gespeichert werden. Schlüssel, Standort und Netzwerk prüfen.</string>
+    <string name="s3_show_access">Zugriffsschlüssel anzeigen</string>
+    <string name="s3_hide_access">Zugriffsschlüssel verbergen</string>
+    <string name="s3_show_secret">Geheimen Schlüssel anzeigen</string>
+    <string name="s3_hide_secret">Geheimen Schlüssel verbergen</string>
+    <string name="s3_checking_connection">S3-Verbindung wird vor dem Speichern geprüft…</string>
+</resources>

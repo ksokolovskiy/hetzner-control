@@ -1,0 +1,5 @@
+<resources>
+    <string name="server_filter_all">All</string>
+    <string name="server_filter_running">Running</string>
+    <string name="server_filter_off">Off</string>
+</resources>

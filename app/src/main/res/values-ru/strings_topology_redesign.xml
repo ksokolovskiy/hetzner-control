@@ -1,0 +1,15 @@
+<resources>
+    <string name="topology_overview">Обзор</string>
+    <string name="topology_members">Подключённые ресурсы</string>
+    <string name="topology_entries">Подсети и маршруты</string>
+    <string name="topology_history">История действий</string>
+    <string name="topology_invalid">Проверьте явно введённые значения и обновите ресурс перед просмотром изменений.</string>
+    <string name="topology_network_cidr_hint">Введите выровненный приватный IPv4-диапазон RFC1918, /24 или крупнее. Диапазон не выбран заранее.</string>
+    <string name="topology_gateway_assigned">Cloud API назначает шлюзы подсетей. Задать свой шлюз для Cloud-подсети нельзя.</string>
+    <string name="topology_validation_scope">Проверки синтаксиса и топологии не гарантируют совместимость и связность с внешней инфраструктурой.</string>
+    <string name="topology_delete_detaches">При удалении сети провайдер автоматически отключает подключённые ресурсы. Проверьте весь список; приложение не отправляет отдельные операции очистки.</string>
+    <string name="topology_no_cloud_subnet">Перед подключением сервера добавьте Cloud-подсеть в его сетевой зоне. Адрес назначит API.</string>
+    <string name="topology_pending">Исходная операция: %1$s</string>
+    <string name="topology_subnets">Подсети</string>
+    <string name="topology_routes">Маршруты</string>
+</resources>

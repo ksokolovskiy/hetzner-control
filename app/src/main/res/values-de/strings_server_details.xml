@@ -1,0 +1,12 @@
+<resources>
+    <string name="server_detail_actions">Aktionen</string>
+    <string name="server_iso_details_label">ISO-Details</string>
+    <string name="server_rebuild_no_password">Hetzner hat für diese erfolgreiche Neuinstallation kein neues Root-Passwort zurückgegeben.</string>
+    <string name="server_detail_cpu">vCPU</string>
+    <string name="server_detail_memory">Arbeitsspeicher, GiB</string>
+    <string name="server_detail_architecture">Architektur</string>
+    <string name="server_detail_cpu_type">CPU-Typ</string>
+    <string name="server_detail_storage_type">Speichertyp</string>
+    <string name="server_detail_actual_disk">Tatsächlicher Systemdatenträger, GB</string>
+    <string name="server_detail_image">Betriebssystem-Image</string>
+</resources>

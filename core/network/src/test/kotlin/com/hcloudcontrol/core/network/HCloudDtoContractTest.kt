@@ -244,10 +244,10 @@ class HCloudDtoContractTest {
         assertEquals(50, attached.size)
         assertEquals("fsn1-dc14", attached.location.name)
         assertEquals(42L, attached.server)
-        assertTrue(attached.protection.deleteProtected)
+        assertEquals(true, attached.protection?.deleteProtected)
         assertEquals("production", attached.labels["environment"])
         assertNull(unattached.server)
-        assertFalse(unattached.protection.deleteProtected)
+        assertEquals(false, unattached.protection?.deleteProtected)
     }
 
     @Test
@@ -285,7 +285,7 @@ class HCloudDtoContractTest {
         val unassigned = response.primary_ips[1]
         assertEquals("192.0.2.15", assigned.ip)
         assertEquals(42L, assigned.assigneeId)
-        assertTrue(assigned.protection.deleteProtected)
+        assertEquals(true, assigned.protection?.deleteProtected)
         assertEquals("web.example.test", assigned.dnsPointers.single().dnsPtr)
         assertNull(unassigned.assigneeId)
         assertEquals("unassigned", unassigned.assigneeType)
@@ -365,7 +365,7 @@ class HCloudDtoContractTest {
         assertNull(network.subnets[1].gateway)
         assertEquals("10.60.0.0/16", network.routes.single().destination)
         assertEquals(listOf(42L, 43L), network.servers)
-        assertTrue(network.protection.deleteProtected)
+        assertEquals(true, network.protection?.deleteProtected)
         assertEquals("production", network.labels["environment"])
         assertNull(response.meta?.pagination?.nextPage)
     }
@@ -415,7 +415,7 @@ class HCloudDtoContractTest {
         assertEquals("role=web", loadBalancer.targets.single().labelSelector?.selector)
         assertEquals("healthy", loadBalancer.targets.single().healthStatuses.single().status)
         assertEquals(42L, loadBalancer.targets.single().targets.single().server?.id)
-        assertTrue(loadBalancer.protection.deleteProtected)
+        assertEquals(true, loadBalancer.protection?.deleteProtected)
         assertEquals("0.0083000000", loadBalancer.loadBalancerType.prices.single().priceHourly.net)
         assertEquals("production", loadBalancer.labels["environment"])
         assertNull(response.meta?.pagination?.nextPage)

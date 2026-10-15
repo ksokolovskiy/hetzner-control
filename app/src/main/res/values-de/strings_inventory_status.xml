@@ -1,0 +1,8 @@
+<resources>
+    <string name="inventory_status_initializing">Wird vorbereitet</string>
+    <string name="inventory_status_off">Ausgeschaltet</string>
+    <string name="inventory_status_running">Läuft</string>
+    <string name="inventory_status_starting">Startet</string>
+    <string name="inventory_status_stopping">Wird angehalten</string>
+    <string name="inventory_status_unknown">Status unbekannt</string>
+</resources>

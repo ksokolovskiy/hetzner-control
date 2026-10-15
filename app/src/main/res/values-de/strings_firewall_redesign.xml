@@ -1,0 +1,8 @@
+<resources>
+    <string name="firewall_redesign_targets">Verknüpfte Ressourcen</string>
+    <string name="firewall_redesign_attached_delete">Die API kann eine verknüpfte Firewall nicht löschen. Entfernen Sie Verknüpfungen nach Prüfung der Sicherheitsfolgen einzeln. Nichts wird automatisch getrennt.</string>
+    <string name="firewall_redesign_broad">Eine /0-Quelle erlaubt diesen TCP-Verkehr von allen Adressen dieser IP-Familie. Keine zusätzliche IPv6-Quelle wird ergänzt.</string>
+    <string name="firewall_redesign_validation">TCP-Port (1–65535) und gültige IP-Adressen oder CIDRs eingeben. Beschreibung: höchstens 255 Zeichen.</string>
+    <string name="firewall_redesign_failed">Der Vorgang konnte nicht bestätigt werden. Ursprüngliche Ressource aktualisieren und prüfen; keine ungewisse Änderung wiederholen.</string>
+    <string name="firewall_redesign_rule_readonly">Vorhandene Regeln sind schreibgeschützt. Nur eingehende TCP-Regeln können ergänzt werden; alle bisherigen Regeln bleiben erhalten.</string>
+</resources>

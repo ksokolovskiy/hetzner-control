@@ -1,0 +1,6 @@
+<resources>
+    <string name="ds_leave_form">Выйти из формы?</string>
+    <string name="ds_leave_form_description">Сохраните черновик, чтобы продолжить позже, или удалите изменения. Отмена оставит вас здесь. Учётные данные никогда не включаются в сохранённый черновик.</string>
+    <string name="ds_keep_draft">Сохранить черновик и выйти</string>
+    <string name="ds_discard_draft">Удалить черновик и выйти</string>
+</resources>

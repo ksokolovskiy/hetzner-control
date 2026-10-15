@@ -2,6 +2,7 @@ package com.hcloudcontrol
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -25,6 +26,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.hcloudcontrol.ui.designsystem.*
+import com.hcloudcontrol.operations.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -43,219 +47,89 @@ import kotlinx.coroutines.withContext
  */
 @Composable
 internal fun SshKeysScreen(projectId: String, repository: HCloudRepository) {
-    var refreshGeneration by remember(projectId) { mutableStateOf(0L) }
-    var refreshing by remember(projectId) { mutableStateOf(false) }
-    var state by remember(projectId) { mutableStateOf<SshKeysState>(SshKeysState.Loading) }
-    val scope = rememberCoroutineScope()
-    val fallback = stringResource(R.string.ssh_inventory_load_error)
+    val contextKey = "ssh-keys:$projectId:${com.hcloudcontrol.ui.navigation.LocalNavigationContext.current?.endpoint.orEmpty()}"
+    val loader = com.hcloudcontrol.ui.state.rememberSectionLoader(contextKey,
+        isEmpty = { it: List<SshKeyOption> -> it.isEmpty() }) { repository.getSshKeys() }
     val highImpactAllowed = LocalHighImpactOperations.current.isAllowed
-    var createDialog by remember(projectId) { mutableStateOf(false) }
-    var deletingKey by remember(projectId) { mutableStateOf<SshKeyOption?>(null) }
+    var createDialog by com.hcloudcontrol.ui.navigation.rememberContextualFlag("$contextKey:create")
+    val coordinator = LocalOperationCoordinator.current
+    val operationContext = LocalOperationContext.current
+    var pendingId by remember(contextKey) { mutableStateOf<String?>(null) }
+    var deletingKey by remember(contextKey) { mutableStateOf<SshKeyOption?>(null) }
+    var query by rememberSaveable(contextKey) { mutableStateOf("") }
+    var expandedId by com.hcloudcontrol.ui.navigation.rememberContextualResourceId(contextKey)
+    val fresh = loader.state.hasSuccessfulResponse && !loader.state.isStale && !loader.state.refreshing && loader.state.error == null
 
-    fun refresh() {
-        if (refreshing) return
-        refreshing = true
-        val generation = refreshGeneration + 1
-        refreshGeneration = generation
-        if (state !is SshKeysState.Content) state = SshKeysState.Loading
-        scope.launch {
-            val result = try {
-                SshKeysState.Content(withContext(Dispatchers.IO) { repository.getSshKeys() })
-            } catch (error: Throwable) {
-                SshKeysState.Error(safeApiFailureMessage(error, fallback))
-            }
-            if (generation == refreshGeneration) {
-                state = result
-                refreshing = false
-            }
-        }
-    }
-
-    LaunchedEffect(projectId) { refresh() }
-
-    HCloudPullToRefresh(
-        isRefreshing = refreshing,
-        onRefresh = ::refresh,
-        modifier = Modifier.fillMaxSize(),
-    ) {
-    LazyColumn(
-        state = rememberRestorableLazyListState("ssh-keys"),
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        item {
-            Text(stringResource(R.string.ssh_inventory_title), style = MaterialTheme.typography.headlineMedium)
-            Text(
-                stringResource(R.string.ssh_inventory_description),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            if (highImpactAllowed) {
-                Button(onClick = { createDialog = true }, modifier = Modifier.padding(top = 12.dp)) {
+    HCloudPullToRefresh(loader.state.refreshing, loader::refresh, Modifier.fillMaxSize()) {
+        LazyColumn(state = rememberRestorableLazyListState(contextKey, contentReady = loader.state.data != null), modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            item {
+                Text(stringResource(R.string.ssh_inventory_title), style = MaterialTheme.typography.headlineMedium)
+                Text(stringResource(R.string.ssh_inventory_description), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (highImpactAllowed) Button(onClick = { createDialog = true }, modifier = Modifier.padding(top = 12.dp)) {
                     Text(stringResource(R.string.ssh_key_create))
-                }
-            } else {
-                Text(
-                    stringResource(R.string.ssh_key_operations_not_allowed),
-                    modifier = Modifier.padding(top = 12.dp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                } else Text(stringResource(R.string.ssh_key_operations_not_allowed), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                HCloudFormField(query, { query = it }, stringResource(R.string.ds_search))
+                HCloudReadSection(loader) {}
             }
-        }
-        when (val current = state) {
-            SshKeysState.Loading -> item {
-                Column(Modifier.fillMaxWidth().padding(vertical = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    CircularProgressIndicator()
-                    Text(stringResource(R.string.ssh_inventory_loading))
-                }
+            coordinator?.all()?.filter { it.isPending && it.intent.resource.context == operationContext && it.intent.resource.resourceType == "ssh_key" }
+                ?.forEach { pending -> item(key = pending.intent.intentId) {
+                    OutlinedButton(onClick = { pendingId = pending.intent.intentId }) { Text(stringResource(R.string.ssh_redesign_pending)) }
+                } }
+            val all = loader.state.data.orEmpty()
+            val keys = all.filter { query.isBlank() || it.name.contains(query.trim(), true) || it.fingerprint.contains(query.trim(), true) }
+                .sortedWith(compareBy<SshKeyOption> { it.name.lowercase() }.thenBy { it.id })
+            if (all.isNotEmpty() && keys.isEmpty()) item {
+                HCloudSectionState(SectionPresentation(SectionKind.NO_RESULTS))
+                OutlinedButton(onClick = { query = "" }) { Text(stringResource(R.string.ds_clear_filters)) }
             }
-            is SshKeysState.Error -> item {
-                SshKeysError(current.message, onRetry = ::refresh)
-            }
-            is SshKeysState.Content -> {
-                val keys = current.keys.sortedWith(compareBy<SshKeyOption> { it.name.lowercase() }.thenBy { it.id })
-                if (keys.isEmpty()) {
-                    item { SshKeysEmpty(onRetry = ::refresh) }
-                } else {
-                    items(keys, key = { it.id }) { key ->
-                        SshKeyCard(key, canManage = highImpactAllowed, onDelete = { deletingKey = key })
-                    }
-                }
+            items(keys, key = { it.id }) { key ->
+                SshKeyCard(key, expanded = expandedId == key.id,
+                    onExpand = { expandedId = if (expandedId == key.id) null else key.id },
+                    canManage = highImpactAllowed && fresh, onDelete = { deletingKey = key })
             }
         }
     }
-    }
-    if (highImpactAllowed && createDialog) {
-        CreateSshKeyDialog(
-            repository = repository,
-            onDismiss = { createDialog = false },
-            onCreated = { createDialog = false; refresh() },
-        )
-    }
+    pendingId?.let { id -> coordinator?.get(id)?.takeIf { it.intent.resource.context == operationContext }?.let { pending ->
+        SshKeyMutationFlow(repository, null, pending, onDismiss = { pendingId = null },
+            onChanged = { pendingId = null; loader.refresh() })
+    } }
+    if (highImpactAllowed && createDialog) CreateSshKeyDialog(repository,
+        { createDialog = false }, { createDialog = false; loader.refresh() })
     deletingKey?.let { key ->
-        if (highImpactAllowed) DeleteSshKeyDialog(
-            key = key,
-            repository = repository,
-            onDismiss = { deletingKey = null },
-            onDeleted = { deletingKey = null; refresh() },
-        )
+        if (highImpactAllowed) DeleteSshKeyDialog(key, repository,
+            { deletingKey = null }, { deletingKey = null; loader.refresh() })
     }
-}
-
-private sealed interface SshKeysState {
-    data object Loading : SshKeysState
-    data class Content(val keys: List<SshKeyOption>) : SshKeysState
-    data class Error(val message: String) : SshKeysState
 }
 
 @Composable
-private fun SshKeyCard(key: SshKeyOption, canManage: Boolean, onDelete: () -> Unit) = Card(
-    modifier = Modifier.fillMaxWidth(),
-    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-) {
-    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(key.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+private fun SshKeyCard(key: SshKeyOption, expanded: Boolean, onExpand: () -> Unit, canManage: Boolean, onDelete: () -> Unit) {
+    var menu by remember(key.id) { mutableStateOf(false) }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        HCloudResourceCard(ResourceCardModel("ssh_key:${key.id}", key.name,
+            stringResource(R.string.ssh_keys_fingerprint, key.fingerprint), stringResource(R.string.ssh_key_no_private_key)), onExpand,
+            menu = if (canManage) ({
+                Box {
+                    TextButton(onClick = { menu = true }) { Text(stringResource(R.string.ds_actions)) }
+                    HCloudMenu(menu, listOf(MenuAction("delete", stringResource(R.string.ssh_key_delete))),
+                        { menu = false }, { onDelete() })
+                }
+            }) else null)
+        if (expanded) Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(stringResource(R.string.ssh_inventory_id, key.id), color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(
             stringResource(R.string.ssh_keys_fingerprint, key.fingerprint),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        if (canManage) {
-            OutlinedButton(onClick = onDelete, modifier = Modifier.padding(top = 6.dp)) {
-                Text(stringResource(R.string.ssh_key_delete))
-            }
         }
     }
 }
 
 @Composable
-private fun CreateSshKeyDialog(repository: HCloudRepository, onDismiss: () -> Unit, onCreated: () -> Unit) {
-    var name by remember { mutableStateOf("") }
-    var publicKey by remember { mutableStateOf("") }
-    var review by remember { mutableStateOf(false) }
-    var submitting by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
-    val scope = rememberCoroutineScope()
-    val failure = stringResource(R.string.ssh_key_create_failed)
-    val valid = name.isNotBlank() && publicKey.isNotBlank()
-    AlertDialog(
-        onDismissRequest = { if (!submitting) onDismiss() },
-        title = { Text(stringResource(if (review) R.string.ssh_key_create_review_title else R.string.ssh_key_create_title)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (review) {
-                    Text(stringResource(R.string.ssh_key_create_review_message))
-                    Text(stringResource(R.string.ssh_key_create_review_name, name.trim()), style = MaterialTheme.typography.bodyMedium)
-                    Text(publicKey.trim(), style = MaterialTheme.typography.bodySmall)
-                    Text(stringResource(R.string.ssh_key_no_private_key), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                } else {
-                    Text(stringResource(R.string.ssh_key_create_intro))
-                    OutlinedTextField(name, { name = it; error = null }, label = { Text(stringResource(R.string.ssh_key_name)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(publicKey, { publicKey = it; error = null }, label = { Text(stringResource(R.string.ssh_key_public_key)) }, minLines = 3, modifier = Modifier.fillMaxWidth())
-                }
-                error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-            }
-        },
-        confirmButton = {
-            Button(onClick = {
-                if (!review) review = true else {
-                    submitting = true; error = null
-                    scope.launch {
-                        try { withContext(Dispatchers.IO) { repository.createSshKey(CreateSshKeySpec(name.trim(), publicKey.trim())) }; onCreated() }
-                        catch (t: Throwable) { error = safeApiFailureMessage(t, failure); submitting = false }
-                    }
-                }
-            }, enabled = valid && !submitting) {
-                Text(stringResource(if (submitting) R.string.common_in_progress else if (review) R.string.ssh_key_create_confirm else R.string.ssh_key_review))
-            }
-        },
-        dismissButton = { TextButton(onClick = { if (!submitting) { if (review) review = false else onDismiss() } }, enabled = !submitting) { Text(stringResource(if (review) R.string.common_back else R.string.common_cancel)) } },
-    )
-}
+private fun CreateSshKeyDialog(repository: HCloudRepository, onDismiss: () -> Unit, onCreated: () -> Unit) =
+    SshKeyMutationFlow(repository, null, onDismiss = onDismiss, onChanged = onCreated)
 
 @Composable
-private fun DeleteSshKeyDialog(key: SshKeyOption, repository: HCloudRepository, onDismiss: () -> Unit, onDeleted: () -> Unit) {
-    var typedName by remember(key.id) { mutableStateOf("") }
-    var submitting by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
-    val scope = rememberCoroutineScope()
-    val failure = stringResource(R.string.ssh_key_delete_failed)
-    AlertDialog(
-        onDismissRequest = { if (!submitting) onDismiss() },
-        title = { Text(stringResource(R.string.ssh_key_delete_title, key.name)) },
-        text = { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(stringResource(R.string.ssh_key_delete_warning, key.name))
-            Text(stringResource(R.string.ssh_key_delete_type_name, key.name))
-            OutlinedTextField(typedName, { typedName = it; error = null }, label = { Text(stringResource(R.string.ssh_key_name)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
-            error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-        } },
-        confirmButton = { Button(onClick = {
-            submitting = true; error = null
-            scope.launch { try { withContext(Dispatchers.IO) { repository.deleteSshKey(key.id) }; onDeleted() } catch (t: Throwable) { error = safeApiFailureMessage(t, failure); submitting = false } }
-        }, enabled = typedName == key.name && !submitting) { Text(stringResource(if (submitting) R.string.common_in_progress else R.string.ssh_key_delete_confirm)) } },
-        dismissButton = { TextButton(onClick = onDismiss, enabled = !submitting) { Text(stringResource(R.string.common_cancel)) } },
-    )
-}
-
-@Composable
-private fun SshKeysError(message: String, onRetry: () -> Unit) = Card(
-    modifier = Modifier.fillMaxWidth(),
-    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-) {
-    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(message, color = MaterialTheme.colorScheme.onErrorContainer)
-        Button(onClick = onRetry) { Text(stringResource(R.string.common_retry)) }
-    }
-}
-
-@Composable
-private fun SshKeysEmpty(onRetry: () -> Unit) = Card(
-    modifier = Modifier.fillMaxWidth(),
-    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-) {
-    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(stringResource(R.string.ssh_inventory_empty), color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Button(onClick = onRetry) { Text(stringResource(R.string.common_retry)) }
-    }
-}
+private fun DeleteSshKeyDialog(key: SshKeyOption, repository: HCloudRepository, onDismiss: () -> Unit, onDeleted: () -> Unit) =
+    SshKeyMutationFlow(repository, key, onDismiss = onDismiss, onChanged = onDeleted)

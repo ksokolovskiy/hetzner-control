@@ -12,7 +12,9 @@ internal data class OnboardingConnectionRequest(
     val displayName: String,
     val token: String,
     val config: HCloudConnectionConfig,
-)
+) {
+    override fun toString(): String = "OnboardingConnectionRequest(credentials=redacted)"
+}
 
 internal fun onboardingConnectionRequest(
     connectionKind: ConnectionKind,

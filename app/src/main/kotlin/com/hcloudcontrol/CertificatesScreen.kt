@@ -34,143 +34,71 @@ import androidx.compose.ui.unit.dp
 import com.hcloudcontrol.core.domain.model.CertificateInventory
 import com.hcloudcontrol.core.domain.model.CloudAction
 import com.hcloudcontrol.core.domain.repository.HCloudRepository
+import com.hcloudcontrol.ui.designsystem.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 
-private sealed interface CertificatesListState {
-    data object Loading : CertificatesListState
-    data class Content(val certificates: List<CertificateInventory>) : CertificatesListState
-    data object Error : CertificatesListState
-}
-
-private sealed interface CertificateDetailState {
-    data object Loading : CertificateDetailState
-    data class Content(val certificate: CertificateInventory) : CertificateDetailState
-    data object Error : CertificateDetailState
-}
-
-private sealed interface CertificateActionsState {
-    data object Loading : CertificateActionsState
-    data class Content(val actions: List<CloudAction>) : CertificateActionsState
-    data object Error : CertificateActionsState
-}
-
 /** Inventory-only certificate view. No PEM, private key, import, renewal or deletion operation exists here. */
 @Composable
 fun CertificatesScreen(repository: HCloudRepository, projectId: String) {
-    var refreshKey by remember(projectId) { mutableIntStateOf(0) }
-    var state by remember(projectId) { mutableStateOf<CertificatesListState>(CertificatesListState.Loading) }
-    var selected by remember(projectId) { mutableStateOf<CertificateInventory?>(null) }
-    BackHandler(enabled = selected != null) { selected = null }
-
-    LaunchedEffect(projectId, refreshKey) {
-        state = CertificatesListState.Loading
-        state = try {
-            CertificatesListState.Content(withContext(Dispatchers.IO) { repository.getCertificates() })
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (_: Throwable) {
-            CertificatesListState.Error
-        }
-    }
-    selected?.let { certificate ->
-        CertificateDetailScreen(certificate, repository) { selected = null }
+    val scope = "certificates:$projectId:${com.hcloudcontrol.ui.navigation.LocalNavigationContext.current?.endpoint.orEmpty()}"
+    val loader = com.hcloudcontrol.ui.state.rememberSectionLoader(scope, isEmpty = { it: List<CertificateInventory> -> it.isEmpty() }) { repository.getCertificates() }
+    var query by androidx.compose.runtime.saveable.rememberSaveable(scope) { mutableStateOf("") }
+    var selectedId by com.hcloudcontrol.ui.navigation.rememberContextualResourceId(scope)
+    BackHandler(enabled = com.hcloudcontrol.ui.navigation.LocalNavigationChrome.current == null && selectedId != null) { selectedId = null }
+    val selected = loader.state.data?.firstOrNull { it.id == selectedId }
+    if (selected != null) {
+        com.hcloudcontrol.ui.navigation.RegisterResourceChildNavigation(
+            com.hcloudcontrol.ui.navigation.RootDestination.MORE, com.hcloudcontrol.ui.navigation.ResourceType.CERTIFICATE,
+            selected.id.toString(), selected.name) { selectedId = null }
+        CertificateDetailScreen(selected, repository) { selectedId = null }
         return
     }
-    when (val current = state) {
-        CertificatesListState.Loading -> CertificateLoading(stringResource(R.string.certificates_loading))
-        CertificatesListState.Error -> StateView(
-            stringResource(R.string.certificates_error_title),
-            stringResource(R.string.certificates_error_message),
-            stringResource(R.string.certificates_retry),
-        ) { refreshKey++ }
-        is CertificatesListState.Content -> if (current.certificates.isEmpty()) {
-            StateView(
-                stringResource(R.string.certificates_empty_title),
-                stringResource(R.string.certificates_empty_message),
-                stringResource(R.string.certificates_retry),
-            ) { refreshKey++ }
-        } else HCloudPullToRefresh(
-            isRefreshing = false,
-            onRefresh = { refreshKey++ },
-            modifier = Modifier.fillMaxSize(),
-        ) {
-        LazyColumn(
-            state = rememberRestorableLazyListState("certificates"),
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
+    HCloudPullToRefresh(loader.state.refreshing, loader::refresh, Modifier.fillMaxSize()) {
+        LazyColumn(state = rememberRestorableLazyListState(scope, contentReady = loader.state.data != null), modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             item {
-                Text(stringResource(R.string.certificates_title), style = MaterialTheme.typography.headlineMedium)
-                Text(stringResource(R.string.certificates_description), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.certificates_title), style = MaterialTheme.typography.titleLarge)
+                HCloudFormField(query, { query = it }, stringResource(R.string.ds_search))
+                HCloudReadSection(loader) {}
             }
-            items(current.certificates.sortedWith(compareBy<CertificateInventory> { it.name.lowercase() }.thenBy { it.id }), key = { it.id }) { certificate ->
-                CertificateCard(certificate) { selected = certificate }
+            if (selectedId != null && loader.state.hasSuccessfulResponse) item {
+                HCloudSectionState(SectionPresentation(SectionKind.MISSING))
+                TextButton(onClick = { selectedId = null }) { Text(stringResource(R.string.common_back)) }
             }
-        }
+            val certificates = loader.state.data.orEmpty()
+            val filtered = certificates.filter { query.isBlank() || it.name.contains(query.trim(), true) || it.domainNames.any { domain -> domain.contains(query.trim(), true) } }
+            if (certificates.isNotEmpty() && filtered.isEmpty()) item { HCloudSectionState(SectionPresentation(SectionKind.NO_RESULTS)) }
+            items(filtered.sortedWith(compareBy<CertificateInventory> { it.name.lowercase() }.thenBy { it.id }), key = { it.id }) { certificate ->
+                val status = listOfNotNull(certificate.status?.issuance?.let { stringResource(R.string.certificates_issuance, it) },
+                    certificate.status?.renewal?.let { stringResource(R.string.certificates_renewal, it) },
+                    certificate.status?.errorCode?.let { stringResource(R.string.certificates_status_error_code, it) })
+                HCloudResourceCard(ResourceCardModel("certificate:${certificate.id}", certificate.name,
+                    status.joinToString(" · ").ifBlank { certificate.type },
+                    listOf(certificate.domainNames.joinToString(" · "), stringResource(R.string.certificates_used_by_title, certificate.usedBy.size)).joinToString("\n")),
+                    { selectedId = certificate.id })
+            }
         }
     }
 }
 
 @Composable
-private fun CertificateCard(certificate: CertificateInventory, onClick: () -> Unit) = Card(
-    Modifier.fillMaxWidth().clickable(onClick = onClick),
-    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-) {
-    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(certificate.name, style = MaterialTheme.typography.titleMedium)
-        Text(certificate.type, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(
-            stringResource(R.string.certificates_domains_count, certificate.domainNames.size),
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        certificate.notValidAfter?.let { date ->
-            Text(stringResource(R.string.certificates_valid_until, date), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
-}
-
-@Composable
-private fun CertificateDetailScreen(
-    initial: CertificateInventory,
-    repository: HCloudRepository,
-    onBack: () -> Unit,
-) {
-    var detailState by remember(initial.id) { mutableStateOf<CertificateDetailState>(CertificateDetailState.Loading) }
-    var actionsState by remember(initial.id) { mutableStateOf<CertificateActionsState>(CertificateActionsState.Loading) }
-    LaunchedEffect(initial.id) {
-        coroutineScope {
-            val detail = async(Dispatchers.IO) { runCatching { repository.getCertificate(initial.id) } }
-            val actions = async(Dispatchers.IO) { runCatching { repository.getCertificateActions(initial.id) } }
-            detailState = detail.await().fold(
-                onSuccess = { CertificateDetailState.Content(it) },
-                onFailure = { CertificateDetailState.Error },
-            )
-            actionsState = actions.await().fold(
-                onSuccess = { CertificateActionsState.Content(it) },
-                onFailure = { CertificateActionsState.Error },
-            )
-        }
-    }
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        item { TextButton(onClick = onBack) { Text("← ${stringResource(R.string.common_back)}") } }
-        item {
-            when (val current = detailState) {
-                CertificateDetailState.Loading -> CertificateLoading(stringResource(R.string.certificates_detail_loading))
-                CertificateDetailState.Error -> Text(stringResource(R.string.certificates_detail_load_error), color = MaterialTheme.colorScheme.error)
-                is CertificateDetailState.Content -> CertificateMetadata(current.certificate)
+private fun CertificateDetailScreen(initial: CertificateInventory, repository: HCloudRepository, onBack: () -> Unit) {
+    val scope = "certificate:${com.hcloudcontrol.ui.navigation.LocalNavigationContext.current}:${initial.id}"
+    val metadata = com.hcloudcontrol.ui.state.rememberSectionLoader(scope + ":metadata") { repository.getCertificate(initial.id) }
+    val history = com.hcloudcontrol.ui.state.rememberSectionLoader(scope + ":history") { repository.getCertificateActions(initial.id) }
+    HCloudPullToRefresh(metadata.state.refreshing || history.state.refreshing, { metadata.refresh(); history.refresh() }, Modifier.fillMaxSize()) {
+        LazyColumn(state = rememberRestorableLazyListState(scope, contentReady = metadata.state.data != null), modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            item { TextButton(onClick = onBack) { Text(stringResource(R.string.common_back)) } }
+            item { HCloudReadSection(metadata) { CertificateMetadata(it) } }
+            item {
+                HCloudReadSection(history) { CertificateActionHistory(it) }
             }
         }
-        item { CertificateActionHistory(actionsState) }
     }
 }
 
@@ -201,15 +129,12 @@ private fun CertificateMetadata(certificate: CertificateInventory) = Column(vert
 }
 
 @Composable
-private fun CertificateActionHistory(state: CertificateActionsState) = Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+private fun CertificateActionHistory(actions: List<CloudAction>) = Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
     Text(stringResource(R.string.certificates_action_history_title), style = MaterialTheme.typography.titleLarge)
     Text(stringResource(R.string.certificates_action_history_description), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-    when (state) {
-        CertificateActionsState.Loading -> CertificateLoading(stringResource(R.string.certificates_action_history_loading))
-        CertificateActionsState.Error -> Text(stringResource(R.string.certificates_action_history_load_error), color = MaterialTheme.colorScheme.error)
-        is CertificateActionsState.Content -> if (state.actions.isEmpty()) {
+    if (actions.isEmpty()) {
             CertificateValue(stringResource(R.string.certificates_action_history_empty))
-        } else state.actions.sortedByDescending { it.id }.forEach { action ->
+        } else actions.sortedByDescending { it.id }.forEach { action ->
             Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(action.command ?: stringResource(R.string.certificates_action_unknown), style = MaterialTheme.typography.titleSmall)
@@ -222,14 +147,6 @@ private fun CertificateActionHistory(state: CertificateActionsState) = Column(ve
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun CertificateLoading(message: String) = Row(verticalAlignment = Alignment.CenterVertically) {
-    CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-    Spacer(Modifier.width(12.dp))
-    Text(message, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
 @Composable

@@ -17,14 +17,14 @@ class PrimaryIpOperationsUseCase(private val repository: HCloudRepository) {
         repository.deletePrimaryIp(primaryIp.id)
     }
     suspend fun assign(primaryIp: PrimaryIpInventory, target: Server): CloudAction {
-        require(primaryIp.assigneeId == null) { "Primary IP is already assigned" }
-        require(primaryIp.location == target.location) { "Primary IP and server must be in the same location" }
-        require(target.status == ServerStatus.OFF) { "Target server must be powered off" }
+        require(primaryIpAssignmentBlock(primaryIp, target) == null) { "Primary IP assignment preconditions are not met" }
         return repository.assignPrimaryIp(primaryIp.id, target.id)
     }
 
     suspend fun unassign(primaryIp: PrimaryIpInventory, currentServer: Server?): CloudAction {
         require(primaryIp.assigneeId != null) { "Primary IP is not assigned" }
+        require(primaryIp.assigneeType == "server") { "Only server assignments are supported" }
+        require(currentServer?.id == primaryIp.assigneeId) { "Assigned server identity differs" }
         require(currentServer?.status == ServerStatus.OFF) { "Assigned server must be powered off" }
         return repository.unassignPrimaryIp(primaryIp.id)
     }

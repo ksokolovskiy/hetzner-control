@@ -1,0 +1,7 @@
+<resources>
+    <string name="connection_checking">Проверяем подключение…</string>
+    <string name="connection_check_offline">Нет подключения. Проверьте сеть и повторите попытку.</string>
+    <string name="connection_check_invalid_token">Токен API недействителен или отозван. Проверьте токен.</string>
+    <string name="connection_check_denied">У токена нет доступа к запрошенным ресурсам.</string>
+    <string name="connection_check_service">Не удалось проверить подключение. Повторите проверку позже.</string>
+</resources>

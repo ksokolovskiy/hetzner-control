@@ -1,0 +1,6 @@
+<resources>
+    <string name="ds_leave_form">Formular verlassen?</string>
+    <string name="ds_leave_form_description">Bewahren Sie den Entwurf auf, um später fortzufahren, oder verwerfen Sie die Änderungen. Abbrechen bleibt hier. Zugangsdaten werden nie in einem Entwurf gespeichert.</string>
+    <string name="ds_keep_draft">Entwurf behalten und verlassen</string>
+    <string name="ds_discard_draft">Verwerfen und verlassen</string>
+</resources>

@@ -21,7 +21,11 @@ internal data class RootPasswordActionResponse(
 
 internal data class RebuildServerRequestDto(
     val image: String,
-    @Json(name = "ssh_keys") val sshKeys: List<Long> = emptyList(),
+)
+/** Unlike password reset/rescue, rebuild may return no new root password. */
+internal data class RebuildServerResponse(
+    val action: ActionDto,
+    @Json(name = "root_password") val rootPassword: String? = null,
 )
 internal data class EnableRescueRequestDto(
     val type: String = "linux64",
@@ -47,6 +51,8 @@ internal data class ServerDto(
     @Json(name = "private_net") val privateNet: List<ServerPrivateNetDto> = emptyList(),
     val volumes: List<Long> = emptyList(),
     @Json(name = "device_maps") val deviceMaps: List<ServerDeviceMapDto> = emptyList(),
+    @Json(name = "primary_disk_size") val primaryDiskSize: Double? = null,
+    val image: ImageDto? = null,
 )
 internal data class ServerPrivateNetDto(
     val network: Long,
@@ -57,14 +63,13 @@ internal data class ServerPrivateNetDto(
 internal data class ServerDeviceMapDto(val volume: Long, val device: String)
 internal data class PlacementGroupReferenceDto(val id: Long)
 internal data class ServerProtectionDto(
-    @Json(name = "delete") val delete: Boolean = false,
-    val rebuild: Boolean = false,
+    @Json(name = "delete") val delete: Boolean? = null,
+    val rebuild: Boolean? = null,
 )
 /** Null fields are intentionally omitted by Moshi, preserving the untouched remote configuration. */
 internal data class ServerConfigurationPatchDto(
     val name: String? = null,
     val labels: Map<String, String>? = null,
-    @Json(name = "placement_group") val placementGroupId: Long? = null,
 )
 /** Null fields are omitted; the domain patch requires one non-null protection flag. */
 internal data class ServerProtectionPatchDto(
@@ -98,6 +103,8 @@ internal data class ServerTypeDto(
     val category: String? = null,
     val architecture: String? = null,
     val locations: List<ServerTypeLocationDto>? = null,
+    @Json(name = "storage_type") val storageType: String? = null,
+    @Json(name = "cpu_type") val cpuType: String? = null,
 )
 internal data class ServerTypeLocationDto(val name: String, val available: Boolean? = null)
 
@@ -116,6 +123,8 @@ internal data class ImageDto(
     val protection: ImageProtectionDto? = null,
     val deprecated: String? = null,
     val deprecation: ImageDeprecationDto? = null,
+    @Json(name = "os_flavor") val osFlavor: String? = null,
+    @Json(name = "os_version") val osVersion: String? = null,
 )
 
 internal data class ImageProtectionDto(@Json(name = "delete") val deleteProtected: Boolean? = null)
@@ -187,7 +196,8 @@ internal data class VolumesResponse(val volumes: List<VolumeDto>, val meta: Meta
 internal data class VolumeResponse(val volume: VolumeDto)
 internal data class CreateVolumeResponse(
     val volume: VolumeDto,
-    val action: ActionDto? = null,
+    val action: ActionDto,
+    @Json(name = "next_actions") val nextActions: List<ActionDto>,
 )
 internal data class CreateVolumeRequestDto(
     val name: String,
@@ -202,11 +212,11 @@ internal data class VolumeDto(
     val location: LocationDto,
     val server: Long? = null,
     val status: String,
-    val protection: VolumeProtectionDto = VolumeProtectionDto(),
+    val protection: VolumeProtectionDto? = null,
     val labels: Map<String, String> = emptyMap(),
 )
 internal data class VolumeProtectionDto(
-    @Json(name = "delete") val deleteProtected: Boolean = false,
+    @Json(name = "delete") val deleteProtected: Boolean? = null,
 )
 internal data class DeleteProtectionPatchDto(@Json(name = "delete") val delete: Boolean)
 
@@ -229,13 +239,12 @@ internal data class FloatingIpResponse(@Json(name = "floating_ip") val floatingI
 internal data class FloatingIpDto(
     val id: Long, val name: String? = null, val type: String, val ip: String,
     @Json(name = "home_location") val homeLocation: LocationDto? = null,
-    @Json(name = "assignee_id") val assigneeId: Long? = null,
-    @Json(name = "assignee_type") val assigneeType: String? = null,
-    val protection: FloatingIpProtectionDto = FloatingIpProtectionDto(),
+    val server: Long? = null,
+    val protection: FloatingIpProtectionDto? = null,
     val labels: Map<String, String> = emptyMap(),
     @Json(name = "dns_ptr") val dnsPointers: List<DnsPointerDto> = emptyList(),
 )
-internal data class FloatingIpProtectionDto(@Json(name = "delete") val deleteProtected: Boolean = false)
+internal data class FloatingIpProtectionDto(@Json(name = "delete") val deleteProtected: Boolean? = null)
 
 internal data class CertificatesResponse(
     val certificates: List<CertificateDto>,
@@ -271,12 +280,12 @@ internal data class PrimaryIpDto(
     val location: LocationDto,
     @Json(name = "assignee_id") val assigneeId: Long? = null,
     @Json(name = "assignee_type") val assigneeType: String? = null,
-    val protection: PrimaryIpProtectionDto = PrimaryIpProtectionDto(),
+    val protection: PrimaryIpProtectionDto? = null,
     val labels: Map<String, String> = emptyMap(),
     @Json(name = "dns_ptr") val dnsPointers: List<DnsPointerDto> = emptyList(),
 )
 internal data class PrimaryIpProtectionDto(
-    @Json(name = "delete") val deleteProtected: Boolean = false,
+    @Json(name = "delete") val deleteProtected: Boolean? = null,
 )
 internal data class DnsPointerDto(
     val ip: String,
@@ -335,7 +344,7 @@ internal data class FirewallLabelSelectorDto(val selector: String)
 
 internal data class NetworksResponse(val networks: List<NetworkDto>, val meta: MetaDto? = null)
 internal data class NetworkResponse(val network: NetworkDto)
-internal data class CreateNetworkResponse(val network: NetworkDto, val action: ActionDto)
+internal data class CreateNetworkResponse(val network: NetworkDto, val action: ActionDto? = null)
 internal data class NetworkMembersResponse(val members: List<NetworkMemberDto>, val meta: MetaDto? = null)
 internal data class NetworkMemberDto(
     val type: String,
@@ -352,7 +361,7 @@ internal data class NetworkDto(
     val subnets: List<NetworkSubnetDto> = emptyList(),
     val routes: List<NetworkRouteDto> = emptyList(),
     val servers: List<Long> = emptyList(),
-    val protection: NetworkProtectionDto = NetworkProtectionDto(),
+    val protection: NetworkProtectionDto? = null,
     val labels: Map<String, String> = emptyMap(),
 )
 internal data class NetworkSubnetDto(
@@ -367,7 +376,7 @@ internal data class NetworkRouteDto(
     val gateway: String,
 )
 internal data class NetworkProtectionDto(
-    @Json(name = "delete") val deleteProtected: Boolean = false,
+    @Json(name = "delete") val deleteProtected: Boolean? = null,
 )
 internal data class CreateNetworkRequestDto(
     val name: String,
@@ -379,8 +388,8 @@ internal data class NetworkSubnetRequestDto(
     val type: String = "cloud",
     @Json(name = "ip_range") val ipRange: String,
     @Json(name = "network_zone") val networkZone: String,
-    val gateway: String? = null,
 )
+internal data class DeleteNetworkSubnetRequestDto(@Json(name = "ip_range") val ipRange: String)
 internal data class NetworkRouteRequestDto(
     val destination: String,
     val gateway: String,
@@ -413,7 +422,7 @@ internal data class LoadBalancerDto(
     @Json(name = "private_net") val privateNet: List<LoadBalancerPrivateNetDto> = emptyList(),
     val services: List<LoadBalancerServiceDto> = emptyList(),
     val targets: List<LoadBalancerTargetDto> = emptyList(),
-    val protection: LoadBalancerProtectionDto = LoadBalancerProtectionDto(),
+    val protection: LoadBalancerProtectionDto? = null,
     val labels: Map<String, String> = emptyMap(),
 )
 internal data class LoadBalancerTypeDto(
@@ -470,7 +479,7 @@ internal data class LoadBalancerTargetHealthDto(
     val status: String,
 )
 internal data class LoadBalancerProtectionDto(
-    @Json(name = "delete") val deleteProtected: Boolean = false,
+    @Json(name = "delete") val deleteProtected: Boolean? = null,
 )
 
 internal data class PlacementGroupsResponse(

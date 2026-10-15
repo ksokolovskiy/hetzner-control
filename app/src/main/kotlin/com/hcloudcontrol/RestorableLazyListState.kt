@@ -11,7 +11,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.rememberUpdatedState
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 
 /**
  * Keeps a list's viewport while a child detail screen replaces the list in the
@@ -64,6 +68,15 @@ internal data class ScrollPosition(val index: Int, val offset: Int) {
     companion object { val Zero = ScrollPosition(0, 0) }
 }
 
+/** Loading rows must not replace a saved data viewport before the inventory is available. */
+internal class PendingScrollRestoration(private val saved: ScrollPosition) {
+    private var pending = true
+    fun target(contentReady: Boolean): ScrollPosition? = saved.takeIf { contentReady && pending }
+    fun restored() { pending = false }
+    fun userInteractedWhileLoading() { pending = false }
+    fun canRecord(contentReady: Boolean): Boolean = contentReady && !pending
+}
+
 internal val LocalScrollPositionRegistry = compositionLocalOf<ScrollPositionRegistry?> { null }
 internal val LocalScrollProjectNamespace = compositionLocalOf { "global" }
 
@@ -77,17 +90,30 @@ internal fun rememberScrollPositionRegistry(): ScrollPositionRegistry = remember
 
 /** Use this in every navigable inventory/catalog LazyColumn. */
 @Composable
-internal fun rememberRestorableLazyListState(screenKey: String): LazyListState {
+internal fun rememberRestorableLazyListState(screenKey: String, contentReady: Boolean = true): LazyListState {
     val registry = LocalScrollPositionRegistry.current
     val namespacedKey = scrollPositionKey(LocalScrollProjectNamespace.current, screenKey)
-    val initial = registry?.positionFor(namespacedKey) ?: ScrollPosition.Zero
+    val initial = remember(namespacedKey) { registry?.positionFor(namespacedKey) ?: ScrollPosition.Zero }
     val state = remember(namespacedKey) { LazyListState(initial.index, initial.offset) }
+    val restoration = remember(namespacedKey) { PendingScrollRestoration(initial) }
+    val currentContentReady by rememberUpdatedState(contentReady)
+    LaunchedEffect(state, namespacedKey) {
+        snapshotFlow { state.isScrollInProgress }.collect { scrolling ->
+            if (scrolling && !currentContentReady) restoration.userInteractedWhileLoading()
+        }
+    }
 
     // Record continuously rather than only on disposal: this covers process/configuration
     // recreation while a list is still visible, as well as detail navigation.
-    LaunchedEffect(registry, namespacedKey, state) {
+    LaunchedEffect(registry, namespacedKey, state, contentReady) {
+        if (!contentReady) return@LaunchedEffect
+        restoration.target(contentReady)?.let { target ->
+            try { state.scrollToItem(target.index, target.offset) }
+            catch (_: CancellationException) { currentCoroutineContext().ensureActive() }
+            finally { restoration.restored() }
+        }
         snapshotFlow { ScrollPosition(state.firstVisibleItemIndex, state.firstVisibleItemScrollOffset) }
-            .collect { position -> registry?.update(namespacedKey, position.index, position.offset) }
+            .collect { position -> if (restoration.canRecord(contentReady)) registry?.update(namespacedKey, position.index, position.offset) }
     }
     return state
 }

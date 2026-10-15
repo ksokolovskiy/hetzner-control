@@ -1,0 +1,6 @@
+<resources>
+    <string name="ssh_redesign_fingerprint">Отпечаток</string>
+    <string name="ssh_redesign_acknowledgment">Я понимаю: действие изменяет только публичный ключ у провайдера, не изменяет ключи, уже установленные на серверах, и не удаляет локальные приватные ключи.</string>
+    <string name="ssh_redesign_new_key">Новый публичный SSH-ключ</string>
+    <string name="ssh_redesign_pending">Проверить предыдущую операцию с SSH-ключом</string>
+</resources>

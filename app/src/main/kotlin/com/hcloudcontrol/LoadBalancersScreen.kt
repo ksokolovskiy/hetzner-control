@@ -53,6 +53,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.Duration
 import java.time.Instant
+import com.hcloudcontrol.ui.designsystem.*
+import com.hcloudcontrol.ui.navigation.*
+import com.hcloudcontrol.ui.state.rememberSectionLoader
+import com.hcloudcontrol.operations.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.foundation.layout.Box
 
 private sealed interface LoadBalancerListState {
     data object Loading : LoadBalancerListState
@@ -82,295 +88,172 @@ private sealed interface LoadBalancerMetricsState {
 private val LOAD_BALANCER_METRICS_WINDOW: Duration = Duration.ofHours(6)
 
 @Composable
-fun LoadBalancersScreen(
-    repository: HCloudRepository,
-    metricsRepository: LoadBalancerMetricsRepository,
-    projectId: String,
-) {
-    var refreshKey by remember(projectId) { mutableIntStateOf(0) }
-    var state by remember(projectId) { mutableStateOf<LoadBalancerListState>(LoadBalancerListState.Loading) }
-    var selected by remember(projectId) { mutableStateOf<LoadBalancerInventory?>(null) }
-    var showTypes by remember(projectId) { mutableStateOf(false) }
-    BackHandler(enabled = selected != null || showTypes) {
-        selected = null
-        showTypes = false
-    }
-
-    LaunchedEffect(projectId, refreshKey) {
-        state = LoadBalancerListState.Loading
-        state = try {
-            LoadBalancerListState.Content(withContext(Dispatchers.IO) { repository.getLoadBalancers() })
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (_: Throwable) {
-            LoadBalancerListState.Error
-        }
-    }
-
-    selected?.let { loadBalancer ->
-        LoadBalancerDetailScreen(
-            initial = loadBalancer,
-            repository = repository,
-            metricsRepository = metricsRepository,
-            onBack = { selected = null },
-            onDeleted = {
-                selected = null
-                refreshKey++
-            },
-        )
+fun LoadBalancersScreen(repository: HCloudRepository, metricsRepository: LoadBalancerMetricsRepository, projectId: String,
+    billingRepository: com.hcloudcontrol.core.domain.repository.BillingRateCardRepository? = null) {
+    val scope = "load-balancers:$projectId:${LocalNavigationContext.current?.endpoint.orEmpty()}"
+    val loader = rememberSectionLoader(scope, isEmpty = { it: List<LoadBalancerInventory> -> it.isEmpty() }) { repository.getLoadBalancers() }
+    var selectedId by rememberContextualResourceId(scope)
+    var query by rememberSaveable(scope) { mutableStateOf("") }
+    var showTypes by rememberSaveable(scope) { mutableStateOf(false) }
+    BackHandler(enabled = LocalNavigationChrome.current == null && (selectedId != null || showTypes)) { if (selectedId != null) selectedId = null else showTypes = false }
+    val selected = loader.state.data?.firstOrNull { it.id == selectedId }
+    if (selected != null) {
+        RegisterResourceChildNavigation(RootDestination.MORE, ResourceType.LOAD_BALANCER, selected.id.toString(), selected.name) { selectedId = null }
+        LoadBalancerDetailScreen(selected, repository, metricsRepository, { selectedId = null }, { selectedId = null; loader.refresh() })
         return
     }
-    if (showTypes) {
-        LoadBalancerTypesScreen(repository = repository, projectId = projectId, onBack = { showTypes = false })
+    if (showTypes) { LoadBalancerTypesScreen(repository, projectId, billingRepository) { showTypes = false }; return }
+    HCloudPullToRefresh(loader.state.refreshing, loader::refresh, Modifier.fillMaxSize()) {
+        LazyColumn(state = rememberRestorableLazyListState("load-balancers", contentReady = loader.state.data != null), modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            item {
+                Text(stringResource(R.string.load_balancers_title), style = MaterialTheme.typography.titleLarge)
+                HCloudFormField(query, { query = it }, stringResource(R.string.ds_search))
+                OutlinedButton(onClick = { showTypes = true }) { Text(stringResource(R.string.load_balancer_types_open_catalog)) }
+                HCloudReadSection(loader) {}
+                if (selectedId != null && loader.state.hasSuccessfulResponse && loader.state.data.orEmpty().none { it.id == selectedId }) {
+                    HCloudSectionState(SectionPresentation(SectionKind.MISSING))
+                    OutlinedButton(onClick = { selectedId = null }) { Text(stringResource(R.string.common_back)) }
+                }
+            }
+            val all = loader.state.data.orEmpty()
+            val filtered = all.filter { query.isBlank() || it.name.contains(query.trim(), true) || it.location.contains(query.trim(), true) }
+            if (all.isNotEmpty() && filtered.isEmpty()) item { HCloudSectionState(SectionPresentation(SectionKind.NO_RESULTS)) }
+            items(filtered.sortedWith(compareBy<LoadBalancerInventory> { it.name.lowercase() }.thenBy { it.id }), key = { it.id }) { balancer ->
+                HCloudResourceCard(ResourceCardModel("$projectId:load-balancer:${balancer.id}", balancer.name,
+                    stringResource(R.string.load_balancers_type_location, balancer.type, balancer.location),
+                    stringResource(R.string.load_balancers_targets_services, balancer.targets.size, balancer.services.size)), { selectedId = balancer.id })
+            }
+        }
+    }
+}
+
+@Composable
+private fun LoadBalancerDetailScreen(initial: LoadBalancerInventory, repository: HCloudRepository,
+    metricsRepository: LoadBalancerMetricsRepository, onBack: () -> Unit, onDeleted: () -> Unit) {
+    val scope = "load-balancer:${LocalNavigationContext.current}:${initial.id}"
+    val metadata = rememberSectionLoader(scope + ":metadata") { repository.getLoadBalancer(initial.id) }
+    val history = rememberSectionLoader(scope + ":history") { repository.getLoadBalancerActions(initial.id) }
+    val metrics = rememberSectionLoader(scope + ":metrics") {
+        val end = Instant.now()
+        metricsRepository.getLoadBalancerMetrics(LoadBalancerMetricsQuery(initial.id, LoadBalancerMetricType.values().toList(),
+            end.minus(LOAD_BALANCER_METRICS_WINDOW), end))
+    }
+    var deleteRequested by rememberSaveable(scope) { mutableStateOf(false) }
+    var protectionRequested by remember(scope) { mutableStateOf(false) }
+    var menu by remember(scope) { mutableStateOf(false) }
+    var relations by rememberSaveable(scope) { mutableStateOf(false) }
+    val fresh = metadata.state.hasSuccessfulResponse && metadata.state.error == null && !metadata.state.refreshing
+    BackHandler(enabled = LocalNavigationChrome.current == null && relations) { relations = false }
+    if (relations) {
+        RegisterResourceChildNavigation(RootDestination.MORE, ResourceType.LOAD_BALANCER, initial.id.toString(),
+            stringResource(R.string.load_balancers_title)) { relations = false }
+        HCloudPullToRefresh(metadata.state.refreshing, metadata::refresh, Modifier.fillMaxSize()) {
+            LazyColumn(state = rememberRestorableLazyListState("load-balancer:${initial.id}:relations", contentReady = metadata.state.data != null), modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                item { TextButton(onClick = { relations = false }) { Text(stringResource(R.string.common_back)) } }
+                item { HCloudReadSection(metadata) { LoadBalancerRelations(it) } }
+            }
+        }
         return
     }
-
-    when (val current = state) {
-        LoadBalancerListState.Loading -> LoadBalancerLoading(stringResource(R.string.load_balancers_loading))
-        LoadBalancerListState.Error -> StateView(
-            stringResource(R.string.load_balancers_error_title),
-            stringResource(R.string.load_balancers_error_message),
-            stringResource(R.string.load_balancers_retry),
-        ) { refreshKey++ }
-        is LoadBalancerListState.Content -> {
-            if (current.loadBalancers.isEmpty()) {
-                LoadBalancerEmptyState(onRetry = { refreshKey++ }, onBrowseTypes = { showTypes = true })
-            } else {
-                HCloudPullToRefresh(
-                    isRefreshing = false,
-                    onRefresh = { refreshKey++ },
-                    modifier = Modifier.fillMaxSize(),
-                ) {
-                LazyColumn(
-                    state = rememberRestorableLazyListState("load-balancers"),
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    item {
-                        Text(stringResource(R.string.load_balancers_title), style = MaterialTheme.typography.headlineMedium)
-                        Text(stringResource(R.string.load_balancers_description), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        OutlinedButton(onClick = { showTypes = true }, modifier = Modifier.padding(top = 8.dp)) {
-                            Text(stringResource(R.string.load_balancer_types_open_catalog))
-                        }
-                    }
-                    items(current.loadBalancers.sortedWith(compareBy<LoadBalancerInventory> { it.name.lowercase() }.thenBy { it.id }), key = { it.id }) { loadBalancer ->
-                        LoadBalancerCard(loadBalancer) { selected = loadBalancer }
+    HCloudPullToRefresh(metadata.state.refreshing || history.state.refreshing || metrics.state.refreshing,
+        { metadata.refresh(); history.refresh(); metrics.refresh() }, Modifier.fillMaxSize()) {
+        LazyColumn(state = rememberRestorableLazyListState("load-balancer:${initial.id}:detail", contentReady = metadata.state.data != null), modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            item { TextButton(onClick = onBack) { Text(stringResource(R.string.common_back)) } }
+            item { HCloudReadSection(metadata) { balancer ->
+                LoadBalancerOverview(balancer)
+                OutlinedButton(onClick = { relations = true }) {
+                    Text(stringResource(R.string.load_balancers_targets_services, balancer.targets.size, balancer.services.size))
+                }
+                if (LocalHighImpactOperations.current.isAllowed && fresh) {
+                    Box {
+                        OutlinedButton(onClick = { menu = true }) { Text(stringResource(R.string.ds_actions)) }
+                        HCloudMenu(menu, listOf(MenuAction("protection", if (!balancer.protectionKnown)
+                            stringResource(R.string.resource_protection_current, stringResource(R.string.ds_cost_unknown))
+                            else stringResource(if (balancer.deleteProtected) R.string.resource_protection_disable else R.string.resource_protection_enable), balancer.protectionKnown),
+                            MenuAction("delete", stringResource(R.string.load_balancers_delete_action), canDeleteLoadBalancer(balancer))),
+                            { menu = false }, { action -> if (action == "delete") deleteRequested = true else protectionRequested = true })
                     }
                 }
-                }
-            }
+                if (protectionRequested) ResourceProtectionControls(balancer.name, balancer.deleteProtected,
+                    ProtectionAdapter(ProtectionResource.LOAD_BALANCER, balancer.id, ProtectionField.DELETE, repository),
+                    onCompleted = metadata::refresh, enabled = fresh, currentKnown = balancer.protectionKnown)
+            } }
+            item { HCloudReadSection(metrics) { LoadBalancerMetricsSection(LoadBalancerMetricsState.Content(it)) } }
+            item { HCloudReadSection(history) { LoadBalancerActionHistorySection(LoadBalancerActionsState.Content(it)) } }
         }
     }
+    if (deleteRequested && metadata.state.data != null && fresh) DeleteLoadBalancerDialog(checkNotNull(metadata.state.data),
+        repository, { deleteRequested = false }, onDeleted)
 }
 
 @Composable
-private fun LoadBalancerEmptyState(onRetry: () -> Unit, onBrowseTypes: () -> Unit) = Column(
-    modifier = Modifier.fillMaxSize().padding(24.dp),
-    verticalArrangement = Arrangement.spacedBy(12.dp),
-) {
-    Text(stringResource(R.string.load_balancers_empty_title), style = MaterialTheme.typography.headlineMedium)
-    Text(stringResource(R.string.load_balancers_empty_message), color = MaterialTheme.colorScheme.onSurfaceVariant)
-    OutlinedButton(onClick = onBrowseTypes) { Text(stringResource(R.string.load_balancer_types_open_catalog)) }
-    OutlinedButton(onClick = onRetry) { Text(stringResource(R.string.load_balancers_retry)) }
-}
-
-@Composable
-private fun LoadBalancerCard(loadBalancer: LoadBalancerInventory, onClick: () -> Unit) = Card(
-    Modifier.fillMaxWidth().clickable(onClick = onClick),
-    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-) {
-    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(loadBalancer.name, style = MaterialTheme.typography.titleMedium)
-        Text(
-            stringResource(R.string.load_balancers_type_location, loadBalancer.type, loadBalancer.location),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            stringResource(R.string.load_balancers_targets_services, loadBalancer.targets.size, loadBalancer.services.size),
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
-@Composable
-private fun LoadBalancerDetailScreen(
-    initial: LoadBalancerInventory,
-    repository: HCloudRepository,
-    metricsRepository: LoadBalancerMetricsRepository,
-    onBack: () -> Unit,
-    onDeleted: () -> Unit,
-) {
-    var detailState by remember(initial.id) { mutableStateOf<LoadBalancerDetailState>(LoadBalancerDetailState.Loading) }
-    var actionsState by remember(initial.id) { mutableStateOf<LoadBalancerActionsState>(LoadBalancerActionsState.Loading) }
-    var metricsState by remember(initial.id) { mutableStateOf<LoadBalancerMetricsState>(LoadBalancerMetricsState.Loading) }
-    var deleteRequested by remember(initial.id) { mutableStateOf(false) }
-    var refreshKey by remember(initial.id) { mutableIntStateOf(0) }
-
-    LaunchedEffect(initial.id, refreshKey) {
-        coroutineScope {
-            val detail = async(Dispatchers.IO) { runCatching { repository.getLoadBalancer(initial.id) } }
-            val actions = async(Dispatchers.IO) { runCatching { repository.getLoadBalancerActions(initial.id) } }
-            val metrics = async(Dispatchers.IO) {
-                val end = Instant.now()
-                val query = LoadBalancerMetricsQuery(
-                    loadBalancerId = initial.id,
-                    types = LoadBalancerMetricType.values().toList(),
-                    start = end.minus(LOAD_BALANCER_METRICS_WINDOW),
-                    end = end,
-                )
-                runCatching { metricsRepository.getLoadBalancerMetrics(query) }
-            }
-            detailState = detail.await().fold(
-                onSuccess = { LoadBalancerDetailState.Content(it) },
-                onFailure = { LoadBalancerDetailState.Error },
-            )
-            actionsState = actions.await().fold(
-                onSuccess = { LoadBalancerActionsState.Content(it) },
-                onFailure = { LoadBalancerActionsState.Error },
-            )
-            metricsState = metrics.await().fold(
-                onSuccess = { LoadBalancerMetricsState.Content(it) },
-                onFailure = { LoadBalancerMetricsState.Error },
-            )
-        }
-    }
-
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        item { TextButton(onClick = onBack) { Text("← ${stringResource(R.string.common_back)}") } }
-        item {
-            when (val current = detailState) {
-                LoadBalancerDetailState.Loading -> LoadBalancerLoading(stringResource(R.string.load_balancers_detail_loading))
-                LoadBalancerDetailState.Error -> Text(stringResource(R.string.load_balancers_detail_load_error), color = MaterialTheme.colorScheme.error)
-                is LoadBalancerDetailState.Content -> {
-                    LoadBalancerOverview(current.loadBalancer)
-                    LoadBalancerLifecycleControls(
-                        loadBalancer = current.loadBalancer,
-                        operationsAllowed = LocalHighImpactOperations.current.isAllowed,
-                        onDelete = { deleteRequested = true },
-                    )
-                    ResourceProtectionControls(
-                        resourceName = current.loadBalancer.name,
-                        deleteProtected = current.loadBalancer.deleteProtected,
-                        repository = repository,
-                        onChange = { patch -> repository.changeLoadBalancerProtection(current.loadBalancer.id, patch) },
-                        onCompleted = { refreshKey++ },
-                    )
-                }
-            }
-        }
-        item { LoadBalancerMetricsSection(metricsState) }
-        item { LoadBalancerActionHistorySection(actionsState) }
-    }
-    if (deleteRequested && detailState is LoadBalancerDetailState.Content) {
-        DeleteLoadBalancerDialog(
-            loadBalancer = (detailState as LoadBalancerDetailState.Content).loadBalancer,
-            repository = repository,
-            onDismiss = { deleteRequested = false },
-            onDeleted = onDeleted,
-        )
-    }
-}
-
-@Composable
-private fun LoadBalancerLifecycleControls(
-    loadBalancer: LoadBalancerInventory,
-    operationsAllowed: Boolean,
-    onDelete: () -> Unit,
-) = Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-    Text(stringResource(R.string.load_balancers_lifecycle_title), style = MaterialTheme.typography.titleMedium)
-    if (!operationsAllowed) {
-        Text(stringResource(R.string.load_balancers_lifecycle_disabled), color = MaterialTheme.colorScheme.onSurfaceVariant)
-    } else if (loadBalancer.deleteProtected) {
-        Text(stringResource(R.string.load_balancers_delete_protected), color = MaterialTheme.colorScheme.onSurfaceVariant)
-    } else {
-        Text(stringResource(R.string.load_balancers_delete_cost_warning), color = MaterialTheme.colorScheme.onSurfaceVariant)
-        OutlinedButton(
-            onClick = onDelete,
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-        ) { Text(stringResource(R.string.load_balancers_delete_action)) }
-    }
-}
-
-@Composable
-private fun DeleteLoadBalancerDialog(
-    loadBalancer: LoadBalancerInventory,
-    repository: HCloudRepository,
-    onDismiss: () -> Unit,
-    onDeleted: () -> Unit,
-) {
-    var typedName by remember(loadBalancer.id) { mutableStateOf("") }
-    var acknowledgement by remember(loadBalancer.id) { mutableStateOf("") }
-    var submitting by remember(loadBalancer.id) { mutableStateOf(false) }
-    var progress by remember(loadBalancer.id) { mutableStateOf<String?>(null) }
-    var failure by remember(loadBalancer.id) { mutableStateOf<String?>(null) }
+private fun DeleteLoadBalancerDialog(loadBalancer: LoadBalancerInventory, repository: HCloudRepository,
+    onDismiss: () -> Unit, onDeleted: () -> Unit) {
+    val session = rememberOperationSession("load_balancer", loadBalancer.id.toString(), "delete",
+        listOf(loadBalancer.name, loadBalancer.protectionKnown, loadBalancer.deleteProtected, loadBalancer.services, loadBalancer.targets.map { it.withoutLiveHealth() }).hashCode().toLong() and 0xffffffffL)
+    val adapter = remember(repository, loadBalancer) { LoadBalancerDeletionAdapter(repository, loadBalancer) }
     val scope = rememberCoroutineScope()
-    val errorFallback = stringResource(R.string.load_balancers_delete_failed)
-    val isAllowed = LocalHighImpactOperations.current.isAllowed
-    val canDelete = isAllowed && !loadBalancer.deleteProtected && typedName == loadBalancer.name && acknowledgement == "DELETE"
-    AlertDialog(
-        onDismissRequest = { if (!submitting) onDismiss() },
-        title = { Text(stringResource(R.string.load_balancers_delete_title, loadBalancer.name)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(stringResource(R.string.load_balancers_delete_warning), color = MaterialTheme.colorScheme.error)
-                Text(stringResource(R.string.load_balancers_delete_traffic_warning))
-                Text(stringResource(R.string.load_balancers_delete_type_name, loadBalancer.name))
-                OutlinedTextField(
-                    value = typedName,
-                    onValueChange = { typedName = it; failure = null },
-                    enabled = !submitting,
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text(stringResource(R.string.load_balancers_delete_name_label)) },
-                )
-                Text(stringResource(R.string.load_balancers_delete_type_word))
-                OutlinedTextField(
-                    value = acknowledgement,
-                    onValueChange = { acknowledgement = it; failure = null },
-                    enabled = !submitting,
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text(stringResource(R.string.load_balancers_delete_word_label)) },
-                )
-                if (submitting) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    CircularProgressIndicator(modifier = Modifier.size(20.dp))
-                    Text(progress ?: stringResource(R.string.common_sending_request))
-                }
-                failure?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    if (!canDelete) return@Button
-                    submitting = true
-                    failure = null
-                    scope.launch {
-                        try {
-                            val action = withContext(Dispatchers.IO) { repository.deleteLoadBalancer(loadBalancer.id) }
-                            awaitCloudAction(repository, action) { progress = it }
-                            onDeleted()
-                        } catch (error: Throwable) {
-                            failure = safeApiFailureMessage(error, errorFallback)
-                            submitting = false
-                        }
-                    }
-                },
-                enabled = canDelete && !submitting,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.error,
-                    contentColor = MaterialTheme.colorScheme.onError,
-                ),
-            ) { Text(stringResource(if (submitting) R.string.common_in_progress else R.string.load_balancers_delete_confirm)) }
-        },
-        dismissButton = { TextButton(onClick = onDismiss, enabled = !submitting) { Text(stringResource(R.string.common_cancel)) } },
-    )
+    val activeContext by androidx.compose.runtime.rememberUpdatedState(LocalOperationContext.current)
+    val allowed by androidx.compose.runtime.rememberUpdatedState(LocalHighImpactOperations.current.isAllowed)
+    var busy by remember(session) { mutableStateOf(false) }
+    var failed by remember(session) { mutableStateOf(false) }
+    var reviewTime by remember(session) { mutableStateOf(0L) }
+    var progress by remember(session) { mutableStateOf(0) }
+    val record = remember(session, busy, progress) { session.record }
+    LaunchedEffect(session) {
+        if (session.record == null) {
+            busy = true
+            try { withContext(Dispatchers.IO) { adapter.validateFresh() }; reviewTime = System.currentTimeMillis() }
+            catch (_: Throwable) { failed = true }
+            busy = false
+        }
+    }
+    val title = stringResource(R.string.load_balancers_delete_title, loadBalancer.name)
+    if (record != null) {
+        OperationResultDialog(title, record, record.intent.resource.context.connectionId, "${loadBalancer.name} · #${loadBalancer.id}",
+            onClose = { if (record.stage == OperationStage.SUCCEEDED) onDeleted() else onDismiss() }, busy = busy, session = session,
+            onCheckStatus = {
+                if (!busy && activeContext == session.context) { busy = true; scope.launch {
+                    try {
+                        val actionId = record.providerActionId
+                        if (actionId != null) {
+                            val original = repository.getAction(actionId); session.observeOriginalAction(original)
+                            if (original.status !in setOf("success", "error")) awaitCloudAction(original,
+                                { id -> repository.getAction(id).also { session.observeOriginalAction(it); progress++ } }, {})
+                        } else session.reconcileExistingEffect(withContext(Dispatchers.IO) { adapter.deleted() })
+                    } catch (_: Throwable) { failed = true; session.unknownIfPending() }
+                    busy = false; progress++
+                } }
+            }) { if (failed) Text(stringResource(R.string.load_balancers_delete_failed), color = MaterialTheme.colorScheme.error) }
+        return
+    }
+    if (reviewTime > 0 && !failed && session.intent != null) {
+        val model = OperationReviewContent(checkNotNull(session.intent), reviewTime, title,
+            session.context?.connectionId.orEmpty(), "${loadBalancer.name} · #${loadBalancer.id}",
+            listOf(ReviewChange(stringResource(R.string.load_balancers_delete_action), null,
+                stringResource(R.string.load_balancers_delete_traffic_warning)),
+                ReviewChange(stringResource(R.string.ds_operation_identity), null,
+                    stringResource(R.string.load_balancers_targets_services, loadBalancer.targets.size, loadBalancer.services.size))),
+            typedIdentity = loadBalancer.name,
+            acknowledgements = listOf(RiskAcknowledgement("traffic", stringResource(R.string.load_balancers_delete_warning))))
+        OperationReviewDialog(model, { proof ->
+            if (!busy) { busy = true; scope.launch {
+                try {
+                    withContext(Dispatchers.IO) { adapter.validateFresh() }
+                    session.beginReviewed(proof, allowed, activeContext)
+                    val action = withContext(Dispatchers.IO) { check(allowed && activeContext == session.context); adapter.delete() }
+                    session.accepted(action); session.observeOriginalAction(action)
+                    awaitCloudAction(action, { id -> repository.getAction(id).also { session.observeOriginalAction(it); progress++ } }, {})
+                } catch (error: Throwable) { session.rejectOrUnknown(error); failed = true }
+                busy = false; progress++
+            } }
+        }, onDismiss, submitEnabled = allowed && !busy)
+    } else HCloudDialog(title, stringResource(R.string.ds_close), onDismiss, onDismiss) {
+        HCloudSectionState(SectionPresentation(if (busy) SectionKind.LOADING else SectionKind.ERROR))
+    }
 }
 
 @Composable
@@ -378,12 +261,19 @@ private fun LoadBalancerOverview(loadBalancer: LoadBalancerInventory) = Column(v
     Text(loadBalancer.name, style = MaterialTheme.typography.headlineMedium)
     LoadBalancerValue(stringResource(R.string.common_id, loadBalancer.id))
     LoadBalancerValue(stringResource(R.string.load_balancers_type_location, loadBalancer.type, loadBalancer.location))
+    LoadBalancerValue(stringResource(R.string.resource_protection_current, if (!loadBalancer.protectionKnown)
+        stringResource(R.string.ds_cost_unknown) else stringResource(if (loadBalancer.deleteProtected)
+            R.string.common_protected_enabled else R.string.common_protected_disabled)))
     val publicAddresses = listOfNotNull(loadBalancer.publicInterface.ipv4Address, loadBalancer.publicInterface.ipv6Address)
     LoadBalancerValue(
         if (loadBalancer.publicInterface.enabled) {
             stringResource(R.string.load_balancers_public_enabled, publicAddresses.joinToString().ifBlank { stringResource(R.string.load_balancers_public_no_address) })
         } else stringResource(R.string.load_balancers_public_disabled),
     )
+}
+
+@Composable
+private fun LoadBalancerRelations(loadBalancer: LoadBalancerInventory) = Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
     Text(stringResource(R.string.load_balancers_services_title, loadBalancer.services.size), style = MaterialTheme.typography.titleMedium)
     if (loadBalancer.services.isEmpty()) LoadBalancerValue(stringResource(R.string.common_none))
     loadBalancer.services.forEach { service ->
@@ -398,7 +288,13 @@ private fun LoadBalancerOverview(loadBalancer: LoadBalancerInventory) = Column(v
     }
     Text(stringResource(R.string.load_balancers_targets_title, loadBalancer.targets.size), style = MaterialTheme.typography.titleMedium)
     if (loadBalancer.targets.isEmpty()) LoadBalancerValue(stringResource(R.string.common_none))
-    loadBalancer.targets.forEach { target ->
+    loadBalancer.targets.forEach { target -> LoadBalancerTargetDetails(target) }
+}
+
+/** Label-selector targets retain their provider-reported resolved children and health. */
+@Composable
+private fun LoadBalancerTargetDetails(target: com.hcloudcontrol.core.domain.model.LoadBalancerTarget) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         val targetName = target.serverId?.let { stringResource(R.string.load_balancers_target_server, it) }
             ?: target.labelSelector?.let { stringResource(R.string.load_balancers_target_label_selector, it) }
             ?: target.ip
@@ -407,6 +303,9 @@ private fun LoadBalancerOverview(loadBalancer: LoadBalancerInventory) = Column(v
         LoadBalancerValue(
             if (health.isBlank()) targetName else stringResource(R.string.load_balancers_target_health, targetName, health),
         )
+        if (target.targets.isNotEmpty()) Column(Modifier.padding(start = 16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            target.targets.forEach { LoadBalancerTargetDetails(it) }
+        }
     }
 }
 
@@ -420,14 +319,12 @@ private fun LoadBalancerMetricsSection(state: LoadBalancerMetricsState) = Column
         is LoadBalancerMetricsState.Content -> {
             if (state.metrics.timeSeries.isEmpty()) {
                 LoadBalancerValue(stringResource(R.string.load_balancers_metrics_empty))
-            } else Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            } else Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     state.metrics.timeSeries.toSortedMap().forEach { (type, series) ->
-                        val latest = series.samples.maxByOrNull { it.timestampSeconds }
-                        LoadBalancerValue("${type.uppercase()}: ${latest?.value ?: stringResource(R.string.load_balancers_metrics_no_samples)}")
+                        com.hcloudcontrol.ui.designsystem.HCloudMetricSeriesCard(type.uppercase(),
+                            series.samples.map { com.hcloudcontrol.ui.designsystem.MetricSeriesPoint(it.timestampSeconds, it.value) }, state.metrics.stepSeconds)
                     }
                     Text(stringResource(R.string.load_balancers_metrics_step, state.metrics.stepSeconds), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
             }
         }
     }

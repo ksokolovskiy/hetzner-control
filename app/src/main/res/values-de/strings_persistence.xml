@@ -1,0 +1,3 @@
+<resources>
+    <string name="settings_local_save_failed">Lokale Änderungen konnten nicht gespeichert werden. Die Änderung wurde nicht bestätigt; bei einem Fehler der Berechtigungsspeicherung bleiben Cloud-Änderungen deaktiviert.</string>
+</resources>

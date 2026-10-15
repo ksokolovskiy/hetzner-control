@@ -1,0 +1,8 @@
+<resources>
+    <string name="firewall_redesign_targets">Attached targets</string>
+    <string name="firewall_redesign_attached_delete">The API cannot delete an attached firewall. Remove its attachments separately after reviewing their security effects. Nothing is detached automatically.</string>
+    <string name="firewall_redesign_broad">A /0 source allows this TCP traffic from every address in that IP family. No extra IPv6 source is added.</string>
+    <string name="firewall_redesign_validation">Enter a TCP port (1–65535) and valid literal IP addresses or CIDRs. Description: at most 255 characters.</string>
+    <string name="firewall_redesign_failed">The operation could not be confirmed. Refresh and review the original resource; do not repeat an uncertain write.</string>
+    <string name="firewall_redesign_rule_readonly">Existing rules are read-only. Only adding an inbound TCP rule is supported; all existing rules are preserved.</string>
+</resources>

@@ -1,0 +1,22 @@
+<resources>
+    <string name="s3_pending_operation">Pending S3 operation — open original result</string>
+    <string name="s3_profile_change_failed">Could not confirm the saved S3 profile change. Check the local connection settings and try again.</string>
+    <string name="s3_original_connection_unavailable_title">Original S3 connection unavailable</string>
+    <string name="s3_original_connection_unavailable">This pending operation remains recorded with its original connection ID and endpoint. The saved connection was removed or changed. Status cannot be checked from another profile; the operation will not be repeated or rebound.</string>
+    <string name="s3_precondition_changed">Connection or resource changed. Refresh and review again.</string>
+    <string name="s3_effect">Effect</string>
+    <string name="s3_profiles_title">S3 connections</string>
+    <string name="s3_selected">Selected connection</string>
+    <string name="s3_select">Select connection</string>
+    <string name="s3_review">Review</string>
+    <string name="s3_invalid_name">Enter a valid S3 bucket name (3–63 lowercase letters, digits, dots or hyphens).</string>
+    <string name="s3_remove_local_only">Remove %1$s from this device only? Provider keys, buckets and objects remain unchanged.</string>
+    <string name="s3_pending_reauthentication">The original operation stays in history. Its original S3 connection is required to check status.</string>
+    <string name="s3_operation_result">S3 operation</string>
+    <string name="s3_connection_check_failed">Could not verify or securely save the connection. Check the keys, location and network.</string>
+    <string name="s3_show_access">Show access key</string>
+    <string name="s3_hide_access">Hide access key</string>
+    <string name="s3_show_secret">Show secret key</string>
+    <string name="s3_hide_secret">Hide secret key</string>
+    <string name="s3_checking_connection">Checking the S3 connection before saving…</string>
+</resources>

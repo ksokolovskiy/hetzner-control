@@ -1,0 +1,6 @@
+<resources>
+    <string name="box_redesign_overview">Übersicht</string>
+    <string name="box_redesign_access">Zugriff</string>
+    <string name="box_redesign_read_only_access">Ordner und Unterkonten werden hier nur angezeigt. Dateibrowser, Benutzeränderungen sowie das Erstellen oder Löschen von Storage Boxes sind nicht verfügbar.</string>
+    <string name="box_snapshot_description_invalid">Bis zu 1000 lateinische Buchstaben, Ziffern, Leerzeichen oder -_,:&lt;&gt;+#!()[]{}</string>
+</resources>

@@ -69,6 +69,18 @@ private fun localizedResourceKeys(file: File): Map<String, String> {
     return keys
 }
 
+private fun localizedDirectoryKeys(directory: File): Map<String, String> {
+    val keys = linkedMapOf<String, String>()
+    directory.listFiles { file -> file.extension == "xml" }.orEmpty().sortedBy { it.name }.forEach { file ->
+        localizedResourceKeys(file).forEach { (key, kind) ->
+            if (keys.put(key, kind) != null) {
+                throw GradleException("Duplicate localized resource key '$key' in ${directory.path}")
+            }
+        }
+    }
+    return keys
+}
+
 val verifyLocalizationIntegrity by tasks.registering {
     group = "verification"
     description = "Verifies translated string keys and the supported application locale configuration."
@@ -88,12 +100,15 @@ val verifyLocalizationIntegrity by tasks.registering {
         resourceDefaults,
         languageSelector,
     )
+    inputs.files(fileTree("src/main/res/values") { include("*.xml") })
+    inputs.files(fileTree("src/main/res/values-ru") { include("*.xml") })
+    inputs.files(fileTree("src/main/res/values-de") { include("*.xml") })
 
     doLast {
-        val base = localizedResourceKeys(defaultStrings.asFile)
+        val base = localizedDirectoryKeys(defaultStrings.asFile.parentFile)
         val translations = linkedMapOf(
-            "ru" to localizedResourceKeys(russianStrings.asFile),
-            "de" to localizedResourceKeys(germanStrings.asFile),
+            "ru" to localizedDirectoryKeys(russianStrings.asFile.parentFile),
+            "de" to localizedDirectoryKeys(germanStrings.asFile.parentFile),
         )
 
         translations.forEach { (locale, keys) ->
@@ -225,4 +240,19 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     debugImplementation(libs.androidx.compose.ui.tooling)
     testImplementation(libs.junit)
+}
+
+// Verify the actual merged declaration, without adding a runtime/SDK test dependency.
+tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
+    val variant = when (name) {
+        "testDebugUnitTest" -> "debug"
+        "testReleaseUnitTest" -> "release"
+        else -> null
+    }
+    if (variant != null) {
+        val manifestTask = "process${variant.replaceFirstChar { it.uppercase() }}Manifest"
+        dependsOn(manifestTask)
+        systemProperty("hcloud.mergedManifest", layout.buildDirectory.file(
+            "intermediates/merged_manifests/$variant/$manifestTask/AndroidManifest.xml").get().asFile.absolutePath)
+    }
 }

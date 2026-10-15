@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_group_application">Приложение</string>
+    <string name="settings_group_safety">Безопасность</string>
+    <string name="settings_group_projects">Проекты</string>
+    <string name="settings_all_connections">Все подключения</string>
+    <string name="settings_search_connections">Поиск подключений</string>
+    <string name="settings_selected_connection">Выбрано</string>
+    <string name="settings_privacy_policy">Политика конфиденциальности</string>
+    <string name="settings_external_link">Открыть официальную внешнюю страницу</string>
+    <string name="settings_profile_shared_scope">Управление Cloud и Storage Box использует Cloud API-токен этого проекта. Object Storage использует отдельное подключение S3.</string>
+    <string name="settings_profile_local_note">Удаление подключения удаляет учётные данные только с этого устройства. Ресурсы и токен у провайдера сохраняются. При необходимости отзовите токен в Hetzner Console. Выполняющиеся операции сохраняют исходную идентичность; для проверки их статуса потребуется подключиться заново.</string>
+    <string name="settings_global_gate_note">Настройка действует на все проекты на этом устройстве. Она не выдаёт права API и не отключает защиту ресурсов. Для каждой операции всё равно нужно отдельное подтверждение.</string>
+    <string name="settings_risk_acknowledgement">Я понимаю, что изменения могут привести к расходам, остановке сервисов или безвозвратному удалению данных.</string>
+    <string name="settings_connection_title">Подключение %1$s</string>
+    <string name="settings_profile_selected_note">Выбрано для Cloud-запросов. Сам выбор не подтверждает действительность прав API.</string>
+    <string name="settings_profile_not_selected_note">Не выбрано. Просмотр профиля не переключает активный Cloud-проект.</string>
+    <string name="settings_switch_to_project">Выбрать этот проект</string>
+    <string name="settings_pending_operation_warning">Выполняющиеся операции или неизвестный результат: %1$d. Исходные проект и ресурс сохраняются. Для проверки статуса может потребоваться повторное подключение.</string>
+    <string name="connection_safe_diagnostics">Диагностика: %1$s</string>
+    <string name="connection_official_console_help">Получить или отозвать токен в официальной Hetzner Console</string>
+</resources>

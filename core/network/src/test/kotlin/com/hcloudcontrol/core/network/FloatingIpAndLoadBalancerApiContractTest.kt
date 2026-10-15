@@ -15,7 +15,7 @@ class FloatingIpAndLoadBalancerApiContractTest {
         MockWebServer().use { server ->
             server.enqueue(
                 MockResponse().setBody(
-                    """{"floating_ips":[{"id":601,"name":"failover-v4","type":"ipv4","ip":"192.0.2.15","home_location":{"id":1,"name":"fsn1-dc14"},"assignee_id":42,"assignee_type":"server","protection":{"delete":true},"labels":{"environment":"production"},"dns_ptr":[{"ip":"192.0.2.15","dns_ptr":"web.example.test"}]}],"meta":{"pagination":{"next_page":2}}}""",
+                    """{"floating_ips":[{"id":601,"name":"failover-v4","type":"ipv4","ip":"192.0.2.15","home_location":{"id":1,"name":"fsn1-dc14"},"server":42,"protection":{"delete":true},"labels":{"environment":"production"},"dns_ptr":[{"ip":"192.0.2.15","dns_ptr":"web.example.test"}]}],"meta":{"pagination":{"next_page":2}}}""",
                 ),
             )
             server.enqueue(
@@ -25,7 +25,7 @@ class FloatingIpAndLoadBalancerApiContractTest {
             )
             server.enqueue(
                 MockResponse().setBody(
-                    """{"floating_ip":{"id":601,"name":"failover-v4","type":"ipv4","ip":"192.0.2.15","home_location":{"id":1,"name":"fsn1-dc14"},"assignee_id":42,"assignee_type":"server","protection":{"delete":true},"labels":{},"dns_ptr":[]}}""",
+                    """{"floating_ip":{"id":601,"name":"failover-v4","type":"ipv4","ip":"192.0.2.15","home_location":{"id":1,"name":"fsn1-dc14"},"server":42,"protection":{"delete":true},"labels":{},"dns_ptr":[]}}""",
                 ),
             )
             server.enqueue(

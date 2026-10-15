@@ -1,0 +1,8 @@
+<resources>
+    <string name="inventory_status_initializing">Initializing</string>
+    <string name="inventory_status_off">Off</string>
+    <string name="inventory_status_running">Running</string>
+    <string name="inventory_status_starting">Starting</string>
+    <string name="inventory_status_stopping">Stopping</string>
+    <string name="inventory_status_unknown">Unknown status</string>
+</resources>

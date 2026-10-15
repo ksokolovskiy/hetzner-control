@@ -5,9 +5,14 @@ import com.hcloudcontrol.core.domain.model.StorageBoxSnapshot
 import com.hcloudcontrol.core.domain.model.CreateStorageBoxSnapshotSpec
 import com.hcloudcontrol.core.domain.model.CreatedStorageBoxSnapshot
 import com.hcloudcontrol.core.domain.model.StorageBoxSubaccount
+import com.hcloudcontrol.core.domain.model.CloudAction
 
-/** Separate read-only boundary for the Hetzner Storage Box API. */
+/** Separate project-scoped boundary for the Hetzner Storage Box API. */
 interface StorageBoxRepository {
+    /** Original provider action ID, on the Storage Box API host rather than Cloud API. */
+    suspend fun getStorageBoxAction(actionId: Long): CloudAction {
+        throw UnsupportedOperationException("Storage Box action status is unavailable")
+    }
     suspend fun getStorageBoxes(): List<StorageBox>
     suspend fun getStorageBox(storageBoxId: Long): StorageBox
     /** Relative folder names returned by the Storage Box API; this is read-only. */

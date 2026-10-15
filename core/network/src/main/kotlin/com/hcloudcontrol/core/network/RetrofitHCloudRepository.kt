@@ -13,6 +13,8 @@ import com.hcloudcontrol.core.domain.model.DeleteProtectionPatch
 import com.hcloudcontrol.core.domain.model.LocationOption
 import com.hcloudcontrol.core.domain.model.LocationDetails
 import com.hcloudcontrol.core.domain.model.Server
+import com.hcloudcontrol.core.domain.model.ServerHardware
+import com.hcloudcontrol.core.domain.model.ServerImageInfo
 import com.hcloudcontrol.core.domain.model.ServerNetworkDeviceInventory
 import com.hcloudcontrol.core.domain.model.ServerPrivateNetworkInterface
 import com.hcloudcontrol.core.domain.model.ServerVolumeDeviceMap
@@ -75,37 +77,50 @@ import com.hcloudcontrol.core.domain.model.RebuiltServerResult
 import com.hcloudcontrol.core.domain.model.ServerRebuildSpec
 
 internal class RetrofitHCloudRepository(private val api: HCloudApi) : HCloudRepository {
-    override suspend fun getServers(): List<Server> = allServerPages().map { it.toDomain() }
+    override suspend fun getServers(): List<Server> = safeHCloudApiCall {
+        allServerPages().map { it.toDomain() }
+    }
 
-    override suspend fun getServer(serverId: Long): Server = api.getServer(serverId).server.toDomain()
+    override suspend fun getServer(serverId: Long): Server = safeHCloudApiCall {
+        api.getServer(serverId).server.toDomain()
+    }
 
-    override suspend fun updateServerConfiguration(serverId: Long, patch: ServerConfigurationPatch): Server =
+    override suspend fun updateServerConfiguration(serverId: Long, patch: ServerConfigurationPatch): Server = safeHCloudApiCall {
+        require(patch.placementGroupId == null) { "Placement group changes require the dedicated action" }
         api.updateServerConfiguration(
             serverId,
-            ServerConfigurationPatchDto(patch.name, patch.labels, patch.placementGroupId),
+            ServerConfigurationPatchDto(patch.name, patch.labels),
         ).server.toDomain()
+    }
 
-    override suspend fun changeServerProtection(serverId: Long, patch: ServerProtectionPatch): CloudAction {
+    override suspend fun changeServerProtection(serverId: Long, patch: ServerProtectionPatch): CloudAction = safeHCloudApiCall {
         require(serverId > 0) { "Server ID must be positive" }
-        return api.changeServerProtection(serverId, ServerProtectionPatchDto(patch.delete, patch.rebuild)).action.toDomain()
+        return@safeHCloudApiCall api.changeServerProtection(serverId, ServerProtectionPatchDto(patch.delete, patch.rebuild)).action.toDomain()
     }
 
     override suspend fun deleteServer(serverId: Long) = safeHCloudApiCall {
         require(serverId > 0) { "Server ID must be positive" }
         api.deleteServer(serverId)
+        Unit
+    }
+
+    override suspend fun deleteServerWithAction(serverId: Long): CloudAction = safeHCloudApiCall {
+        require(serverId > 0) { "Server ID must be positive" }
+        api.deleteServer(serverId).action.toDomain()
     }
 
     override suspend fun rebuildServer(serverId: Long, spec: ServerRebuildSpec): RebuiltServerResult = safeHCloudApiCall {
         require(serverId > 0) { "Server ID must be positive" }
-        api.rebuildServer(serverId, RebuildServerRequestDto(spec.image, spec.sshKeyIds)).let { response ->
+        require(spec.sshKeyIds.isEmpty()) { "Rebuild does not accept SSH key selection" }
+        api.rebuildServer(serverId, RebuildServerRequestDto(spec.image)).let { response ->
             RebuiltServerResult(
                 action = response.action.toDomain(),
-                password = response.rootPassword.takeIf { it.isNotBlank() }?.let(OneTimeRootPassword::fromApiResponse),
+                password = response.rootPassword?.takeIf { it.isNotBlank() }?.let(OneTimeRootPassword::fromApiResponse),
             )
         }
     }
 
-    override suspend fun getServerActions(serverId: Long): List<CloudAction> {
+    override suspend fun getServerActions(serverId: Long): List<CloudAction> = safeHCloudApiCall {
         val result = mutableListOf<CloudAction>()
         var page = 1
         do {
@@ -113,10 +128,11 @@ internal class RetrofitHCloudRepository(private val api: HCloudApi) : HCloudRepo
             result += response.actions.map { it.toDomain() }
             page = response.meta?.pagination?.nextPage ?: 0
         } while (page != 0)
-        return result
+        return@safeHCloudApiCall result
     }
 
-    override suspend fun getServerTypes(): List<ServerTypeOption> = allServerTypePages().map { type ->
+    override suspend fun getServerTypes(): List<ServerTypeOption> = safeHCloudApiCall {
+        allServerTypePages().map { type ->
         ServerTypeOption(
             id = type.id,
             name = type.name,
@@ -129,10 +145,13 @@ internal class RetrofitHCloudRepository(private val api: HCloudApi) : HCloudRepo
             // A missing availability flag must never be interpreted as permission to create.
             // The UI only offers a type after the API explicitly marks the location available.
             availableLocations = type.locations.orEmpty().filter { it.available == true }.map { it.name }.toSet(),
+            storageType = type.storageType,
+            cpuType = type.cpuType,
         )
     }
+    }
 
-    override suspend fun getServerType(serverTypeId: Long): ServerTypeDetails {
+    override suspend fun getServerType(serverTypeId: Long): ServerTypeDetails = safeHCloudApiCall {
         require(serverTypeId > 0) { "Server type ID must be positive" }
         val type = api.getServerType(serverTypeId).server_type
         // Currency/VAT live in the official pricing resource. Values are preserved verbatim.
@@ -148,21 +167,24 @@ internal class RetrofitHCloudRepository(private val api: HCloudApi) : HCloudRepo
                 monthly = price.priceMonthly.toDomain(),
             )
         }
-        return ServerTypeDetails(
+        return@safeHCloudApiCall ServerTypeDetails(
             id = type.id, name = type.name, description = type.description.orEmpty(),
             cores = type.cores ?: 0, memoryGb = type.memory ?: 0.0, diskGb = type.disk ?: 0,
             category = type.category, architecture = type.architecture,
             locations = type.locations.orEmpty().map { ServerTypeLocationAvailability(it.name, it.available) },
             prices = prices,
+            storageType = type.storageType, cpuType = type.cpuType,
         )
     }
 
-    override suspend fun getSystemImages(): List<ImageOption> = allImagePages("system").mapNotNull { image ->
+    override suspend fun getSystemImages(): List<ImageOption> = safeHCloudApiCall {
+        allImagePages("system").mapNotNull { image ->
         val name = image.name ?: return@mapNotNull null
         ImageOption(image.id, name, image.description.orEmpty(), image.type ?: "system", image.architecture)
     }
+    }
 
-    override suspend fun getBackupAndSnapshotImages(): List<BackupSnapshotImage> =
+    override suspend fun getBackupAndSnapshotImages(): List<BackupSnapshotImage> = safeHCloudApiCall {
         allImagePages("backup").plus(allImagePages("snapshot")).map { image ->
             BackupSnapshotImage(
                 id = image.id,
@@ -173,15 +195,20 @@ internal class RetrofitHCloudRepository(private val api: HCloudApi) : HCloudRepo
                 deprecatedAt = image.deprecated,
             )
         }
+    }
 
-    override suspend fun getImages(): List<CloudImageInventory> = allImagePages().map { it.toInventory() }
+    override suspend fun getImages(): List<CloudImageInventory> = safeHCloudApiCall {
+        allImagePages().map { it.toInventory() }
+    }
 
-    override suspend fun getImage(imageId: Long): CloudImageInventory = api.getImage(imageId).image.toInventory()
-    override suspend fun getImageActions(imageId: Long): List<CloudAction> {
+    override suspend fun getImage(imageId: Long): CloudImageInventory = safeHCloudApiCall {
+        api.getImage(imageId).image.toInventory()
+    }
+    override suspend fun getImageActions(imageId: Long): List<CloudAction> = safeHCloudApiCall {
         require(imageId > 0) { "Image ID must be positive" }
         val result = mutableListOf<ActionDto>(); var page = 1
         do { val response = api.getImageActions(imageId, page); result += response.actions; page = response.meta?.pagination?.nextPage ?: 0 } while (page > 0)
-        return result.map { it.toDomain() }
+        return@safeHCloudApiCall result.map { it.toDomain() }
     }
 
     override suspend fun deleteImage(imageId: Long) = safeHCloudApiCall {
@@ -194,15 +221,19 @@ internal class RetrofitHCloudRepository(private val api: HCloudApi) : HCloudRepo
         api.changeImageProtection(imageId, ImageProtectionPatchDto(delete = patch.delete)).action.toDomain()
     }
 
-    override suspend fun getIsos(): List<IsoOption> = allIsoPages().map { it.toDomain() }
+    override suspend fun getIsos(): List<IsoOption> = safeHCloudApiCall {
+        allIsoPages().map { it.toDomain() }
+    }
 
-    override suspend fun getIso(isoId: Long): IsoOption = api.getIso(isoId).iso.toDomain()
+    override suspend fun getIso(isoId: Long): IsoOption = safeHCloudApiCall {
+        api.getIso(isoId).iso.toDomain()
+    }
 
-    override suspend fun getServerTypePrice(serverTypeId: Long, location: String): ServerTypeLocationPrice? {
+    override suspend fun getServerTypePrice(serverTypeId: Long, location: String): ServerTypeLocationPrice? = safeHCloudApiCall {
         val pricing = api.getPricing().pricing
-        val serverType = pricing.serverTypes.firstOrNull { it.id == serverTypeId } ?: return null
-        val price = serverType.prices.firstOrNull { it.location == location } ?: return null
-        return ServerTypeLocationPrice(
+        val serverType = pricing.serverTypes.firstOrNull { it.id == serverTypeId } ?: return@safeHCloudApiCall null
+        val price = serverType.prices.firstOrNull { it.location == location } ?: return@safeHCloudApiCall null
+        return@safeHCloudApiCall ServerTypeLocationPrice(
             serverTypeId = serverType.id,
             serverTypeName = serverType.name,
             location = price.location,
@@ -213,16 +244,18 @@ internal class RetrofitHCloudRepository(private val api: HCloudApi) : HCloudRepo
         )
     }
 
-    override suspend fun getVolumes(): List<VolumeInventory> = allVolumePages().map { it.toInventory() }
-
-    override suspend fun getVolume(volumeId: Long): VolumeInventory {
-        require(volumeId > 0) { "Volume ID must be positive" }
-        return api.getVolume(volumeId).volume.toInventory()
+    override suspend fun getVolumes(): List<VolumeInventory> = safeHCloudApiCall {
+        allVolumePages().map { it.toInventory() }
     }
 
-    override suspend fun getVolumeActions(volumeId: Long): List<CloudAction> {
+    override suspend fun getVolume(volumeId: Long): VolumeInventory = safeHCloudApiCall {
         require(volumeId > 0) { "Volume ID must be positive" }
-        return allVolumeActionPages(volumeId).map { it.toDomain() }
+        return@safeHCloudApiCall api.getVolume(volumeId).volume.toInventory()
+    }
+
+    override suspend fun getVolumeActions(volumeId: Long): List<CloudAction> = safeHCloudApiCall {
+        require(volumeId > 0) { "Volume ID must be positive" }
+        return@safeHCloudApiCall allVolumeActionPages(volumeId).map { it.toDomain() }
     }
 
     override suspend fun createVolume(spec: CreateVolumeSpec): CreatedVolume = safeHCloudApiCall {
@@ -234,12 +267,13 @@ internal class RetrofitHCloudRepository(private val api: HCloudApi) : HCloudRepo
                 labels = spec.labels,
             ),
         )
-        CreatedVolume(response.volume.toInventory(), response.action?.toDomain())
+        CreatedVolume(response.volume.toInventory(), response.action.toDomain(), response.nextActions.map { it.toDomain() })
     }
 
-    override suspend fun deleteVolume(volumeId: Long): CloudAction = safeHCloudApiCall {
+    override suspend fun deleteVolume(volumeId: Long): CloudAction? = safeHCloudApiCall {
         require(volumeId > 0) { "Volume ID must be positive" }
-        api.deleteVolume(volumeId).action.toDomain()
+        requireNoContent(api.deleteVolume(volumeId))
+        null
     }
 
     override suspend fun changeVolumeProtection(volumeId: Long, patch: DeleteProtectionPatch): CloudAction = safeHCloudApiCall {
@@ -247,7 +281,9 @@ internal class RetrofitHCloudRepository(private val api: HCloudApi) : HCloudRepo
         api.changeVolumeProtection(volumeId, DeleteProtectionPatchDto(patch.delete)).action.toDomain()
     }
 
-    override suspend fun getPrimaryIps(): List<PrimaryIpInventory> = allPrimaryIpPages().map { it.toInventory() }
+    override suspend fun getPrimaryIps(): List<PrimaryIpInventory> = safeHCloudApiCall {
+        allPrimaryIpPages().map { it.toInventory() }
+    }
 
     override suspend fun createPrimaryIp(spec: CreatePrimaryIpSpec): CreatedPrimaryIp = safeHCloudApiCall {
         val response = api.createPrimaryIp(
@@ -263,46 +299,49 @@ internal class RetrofitHCloudRepository(private val api: HCloudApi) : HCloudRepo
         CreatedPrimaryIp(response.primaryIp.toInventory(), response.action?.toDomain())
     }
 
-    override suspend fun getPrimaryIp(primaryIpId: Long): PrimaryIpInventory {
+    override suspend fun getPrimaryIp(primaryIpId: Long): PrimaryIpInventory = safeHCloudApiCall {
         require(primaryIpId > 0) { "Primary IP ID must be positive" }
-        return api.getPrimaryIp(primaryIpId).primaryIp.toInventory()
+        return@safeHCloudApiCall api.getPrimaryIp(primaryIpId).primaryIp.toInventory()
     }
 
-    override suspend fun getPrimaryIpActions(primaryIpId: Long): List<CloudAction> {
+    override suspend fun getPrimaryIpActions(primaryIpId: Long): List<CloudAction> = safeHCloudApiCall {
         require(primaryIpId > 0) { "Primary IP ID must be positive" }
-        return allPrimaryIpActionPages(primaryIpId).map { it.toDomain() }
+        return@safeHCloudApiCall allPrimaryIpActionPages(primaryIpId).map { it.toDomain() }
     }
 
-    override suspend fun deletePrimaryIp(primaryIpId: Long) {
+    override suspend fun deletePrimaryIp(primaryIpId: Long) = safeHCloudApiCall {
         require(primaryIpId > 0) { "Primary IP ID must be positive" }
         api.deletePrimaryIp(primaryIpId)
     }
 
-    override suspend fun getFloatingIps(): List<FloatingIpInventory> = allFloatingIpPages().map { it.toDomain() }
-
-    override suspend fun getFloatingIp(floatingIpId: Long): FloatingIpInventory =
-        api.getFloatingIp(floatingIpId).floatingIp.toDomain()
-
-    override suspend fun getFloatingIpActions(floatingIpId: Long): List<CloudAction> {
-        require(floatingIpId > 0) { "Floating IP ID must be positive" }
-        return allFloatingIpActionPages(floatingIpId).map { it.toDomain() }
+    override suspend fun getFloatingIps(): List<FloatingIpInventory> = safeHCloudApiCall {
+        allFloatingIpPages().map { it.toDomain() }
     }
 
-    override suspend fun assignFloatingIp(floatingIpId: Long, serverId: Long): CloudAction {
+    override suspend fun getFloatingIp(floatingIpId: Long): FloatingIpInventory = safeHCloudApiCall {
+        api.getFloatingIp(floatingIpId).floatingIp.toDomain()
+    }
+
+    override suspend fun getFloatingIpActions(floatingIpId: Long): List<CloudAction> = safeHCloudApiCall {
+        require(floatingIpId > 0) { "Floating IP ID must be positive" }
+        return@safeHCloudApiCall allFloatingIpActionPages(floatingIpId).map { it.toDomain() }
+    }
+
+    override suspend fun assignFloatingIp(floatingIpId: Long, serverId: Long): CloudAction = safeHCloudApiCall {
         require(floatingIpId > 0) { "Floating IP ID must be positive" }
         require(serverId > 0) { "Server ID must be positive" }
-        return api.assignFloatingIp(floatingIpId, AssignFloatingIpRequestDto(serverId)).action.toDomain()
+        return@safeHCloudApiCall api.assignFloatingIp(floatingIpId, AssignFloatingIpRequestDto(serverId)).action.toDomain()
     }
 
-    override suspend fun unassignFloatingIp(floatingIpId: Long): CloudAction {
+    override suspend fun unassignFloatingIp(floatingIpId: Long): CloudAction = safeHCloudApiCall {
         require(floatingIpId > 0) { "Floating IP ID must be positive" }
-        return api.unassignFloatingIp(floatingIpId).action.toDomain()
+        return@safeHCloudApiCall api.unassignFloatingIp(floatingIpId).action.toDomain()
     }
 
-    override suspend fun changeFloatingIpReverseDns(floatingIpId: Long, ip: String, dnsPtr: String?): CloudAction {
+    override suspend fun changeFloatingIpReverseDns(floatingIpId: Long, ip: String, dnsPtr: String?): CloudAction = safeHCloudApiCall {
         require(floatingIpId > 0) { "Floating IP ID must be positive" }
         require(ip.isNotBlank()) { "IP address must not be blank" }
-        return api.changeFloatingIpReverseDns(floatingIpId, ChangeDnsPtrRequestDto(ip, dnsPtr)).action.toDomain()
+        return@safeHCloudApiCall api.changeFloatingIpReverseDns(floatingIpId, ChangeDnsPtrRequestDto(ip, dnsPtr)).action.toDomain()
     }
 
     override suspend fun changeFloatingIpProtection(floatingIpId: Long, patch: DeleteProtectionPatch): CloudAction = safeHCloudApiCall {
@@ -310,73 +349,85 @@ internal class RetrofitHCloudRepository(private val api: HCloudApi) : HCloudRepo
         api.changeFloatingIpProtection(floatingIpId, DeleteProtectionPatchDto(patch.delete)).action.toDomain()
     }
 
-    override suspend fun deleteFloatingIp(floatingIpId: Long) {
+    override suspend fun deleteFloatingIp(floatingIpId: Long) = safeHCloudApiCall {
         require(floatingIpId > 0) { "Floating IP ID must be positive" }
         api.deleteFloatingIp(floatingIpId)
     }
 
-    override suspend fun getCertificates(): List<CertificateInventory> = allCertificatePages().map { it.toDomain() }
-
-    override suspend fun getCertificate(certificateId: Long): CertificateInventory {
-        require(certificateId > 0) { "Certificate ID must be positive" }
-        return api.getCertificate(certificateId).certificate.toDomain()
+    override suspend fun getCertificates(): List<CertificateInventory> = safeHCloudApiCall {
+        allCertificatePages().map { it.toDomain() }
     }
 
-    override suspend fun getCertificateActions(certificateId: Long): List<CloudAction> {
+    override suspend fun getCertificate(certificateId: Long): CertificateInventory = safeHCloudApiCall {
         require(certificateId > 0) { "Certificate ID must be positive" }
-        return allCertificateActionPages(certificateId).map { it.toDomain() }
+        return@safeHCloudApiCall api.getCertificate(certificateId).certificate.toDomain()
     }
 
-    override suspend fun assignPrimaryIp(primaryIpId: Long, serverId: Long): CloudAction =
+    override suspend fun getCertificateActions(certificateId: Long): List<CloudAction> = safeHCloudApiCall {
+        require(certificateId > 0) { "Certificate ID must be positive" }
+        return@safeHCloudApiCall allCertificateActionPages(certificateId).map { it.toDomain() }
+    }
+
+    override suspend fun assignPrimaryIp(primaryIpId: Long, serverId: Long): CloudAction = safeHCloudApiCall {
         api.assignPrimaryIp(primaryIpId, AssignPrimaryIpRequestDto(serverId)).action.toDomain()
-    override suspend fun unassignPrimaryIp(primaryIpId: Long): CloudAction = api.unassignPrimaryIp(primaryIpId).action.toDomain()
-    override suspend fun changePrimaryIpReverseDns(primaryIpId: Long, ip: String, dnsPtr: String?): CloudAction =
+    }
+    override suspend fun unassignPrimaryIp(primaryIpId: Long): CloudAction = safeHCloudApiCall {
+        api.unassignPrimaryIp(primaryIpId).action.toDomain()
+    }
+    override suspend fun changePrimaryIpReverseDns(primaryIpId: Long, ip: String, dnsPtr: String?): CloudAction = safeHCloudApiCall {
         api.changePrimaryIpReverseDns(primaryIpId, ChangeDnsPtrRequestDto(ip, dnsPtr)).action.toDomain()
+    }
 
     override suspend fun changePrimaryIpProtection(primaryIpId: Long, patch: DeleteProtectionPatch): CloudAction = safeHCloudApiCall {
         require(primaryIpId > 0) { "Primary IP ID must be positive" }
         api.changePrimaryIpProtection(primaryIpId, DeleteProtectionPatchDto(patch.delete)).action.toDomain()
     }
 
-    override suspend fun getFirewalls(): List<FirewallInventory> = allFirewallPages().map { it.toInventory() }
-    override suspend fun getFirewall(firewallId: Long): FirewallInventory {
-        require(firewallId > 0) { "Firewall ID must be positive" }
-        return api.getFirewall(firewallId).firewall.toInventory()
+    override suspend fun getFirewalls(): List<FirewallInventory> = safeHCloudApiCall {
+        allFirewallPages().map { it.toInventory() }
     }
-    override suspend fun getFirewallActions(firewallId: Long): List<CloudAction> {
+    override suspend fun getFirewall(firewallId: Long): FirewallInventory = safeHCloudApiCall {
         require(firewallId > 0) { "Firewall ID must be positive" }
-        return allFirewallActionPages(firewallId).map { it.toDomain() }
+        return@safeHCloudApiCall api.getFirewall(firewallId).firewall.toInventory()
     }
-    override suspend fun createFirewall(spec: CreateFirewallSpec): CreatedFirewall {
+    override suspend fun getFirewallActions(firewallId: Long): List<CloudAction> = safeHCloudApiCall {
+        require(firewallId > 0) { "Firewall ID must be positive" }
+        return@safeHCloudApiCall allFirewallActionPages(firewallId).map { it.toDomain() }
+    }
+    override suspend fun createFirewall(spec: CreateFirewallSpec): CreatedFirewall = safeHCloudApiCall {
         validateFirewallSpec(spec.rules)
         val response = api.createFirewall(spec.toRequest())
-        return CreatedFirewall(response.firewall.toInventory(), response.actions.map { it.toDomain() })
+        return@safeHCloudApiCall CreatedFirewall(response.firewall.toInventory(), response.actions.map { it.toDomain() })
     }
-    override suspend fun deleteFirewall(firewallId: Long) {
+    override suspend fun deleteFirewall(firewallId: Long) = safeHCloudApiCall {
         require(firewallId > 0) { "Firewall ID must be positive" }
         api.deleteFirewall(firewallId)
     }
-    override suspend fun setFirewallRules(firewallId: Long, rules: List<FirewallRuleSpec>): CloudAction {
+    override suspend fun setFirewallRules(firewallId: Long, rules: List<FirewallRuleSpec>): CloudAction = safeHCloudApiCall {
         require(firewallId > 0) { "Firewall ID must be positive" }
         validateFirewallSpec(rules)
-        return api.setFirewallRules(firewallId, SetFirewallRulesRequestDto(rules.map { it.toRequest() })).action.toDomain()
+        return@safeHCloudApiCall api.setFirewallRules(firewallId, SetFirewallRulesRequestDto(rules.map { it.toRequest() })).action.toDomain()
     }
-    override suspend fun applyFirewallToServer(firewallId: Long, serverId: Long): List<CloudAction> =
+    override suspend fun applyFirewallToServer(firewallId: Long, serverId: Long): List<CloudAction> = safeHCloudApiCall {
         api.applyFirewallToResources(firewallId, firewallServerRequest(serverId)).actions.map { it.toDomain() }
-    override suspend fun removeFirewallFromServer(firewallId: Long, serverId: Long): List<CloudAction> =
+    }
+    override suspend fun removeFirewallFromServer(firewallId: Long, serverId: Long): List<CloudAction> = safeHCloudApiCall {
         api.removeFirewallFromResources(firewallId, firewallRemoveServerRequest(serverId)).actions.map { it.toDomain() }
+    }
 
-    override suspend fun getPrivateNetworks(): List<PrivateNetworkInventory> = allNetworkPages().map { it.toInventory() }
+    override suspend fun getPrivateNetworks(): List<PrivateNetworkInventory> = safeHCloudApiCall {
+        allNetworkPages().map { it.toInventory() }
+    }
     override suspend fun createPrivateNetwork(spec: CreatePrivateNetworkSpec): CreatedPrivateNetwork = safeHCloudApiCall {
         api.createNetwork(CreateNetworkRequestDto(spec.name, spec.ipRange, spec.labels)).let { response ->
-            CreatedPrivateNetwork(response.network.toInventory(), response.action.toDomain())
+            CreatedPrivateNetwork(response.network.toInventory(), response.action?.toDomain())
         }
     }
-    override suspend fun getPrivateNetwork(networkId: Long): PrivateNetworkInventory {
+    override suspend fun getPrivateNetwork(networkId: Long): PrivateNetworkInventory = safeHCloudApiCall {
         require(networkId > 0) { "Network ID must be positive" }
-        return api.getNetwork(networkId).network.toInventory()
+        return@safeHCloudApiCall api.getNetwork(networkId).network.toInventory()
     }
-    override suspend fun getPrivateNetworkMembers(networkId: Long): List<PrivateNetworkMember> {
+    override suspend fun getPrivateNetworkMembers(networkId: Long): List<PrivateNetworkMember> = safeHCloudApiCall {
         require(networkId > 0) { "Network ID must be positive" }
         val result = mutableListOf<NetworkMemberDto>()
         var page = 1
@@ -385,17 +436,18 @@ internal class RetrofitHCloudRepository(private val api: HCloudApi) : HCloudRepo
             result += response.members
             page = response.meta?.pagination?.nextPage ?: 0
         } while (page > 0)
-        return result.map { PrivateNetworkMember(it.type, it.id, it.ip, it.aliasIps, it.subnet, it.status) }
+        return@safeHCloudApiCall result.map { PrivateNetworkMember(it.type, it.id, it.ip, it.aliasIps, it.subnet, it.status) }
     }
-    override suspend fun getPrivateNetworkActions(networkId: Long): List<CloudAction> {
+    override suspend fun getPrivateNetworkActions(networkId: Long): List<CloudAction> = safeHCloudApiCall {
         require(networkId > 0) { "Network ID must be positive" }
         val result = mutableListOf<ActionDto>(); var page = 1
         do { val response = api.getNetworkActions(networkId, page); result += response.actions; page = response.meta?.pagination?.nextPage ?: 0 } while (page > 0)
-        return result.map { it.toDomain() }
+        return@safeHCloudApiCall result.map { it.toDomain() }
     }
-    override suspend fun deletePrivateNetwork(networkId: Long): CloudAction = safeHCloudApiCall {
+    override suspend fun deletePrivateNetwork(networkId: Long): CloudAction? = safeHCloudApiCall {
         require(networkId > 0) { "Network ID must be positive" }
-        api.deleteNetwork(networkId).action.toDomain()
+        requireNoContent(api.deleteNetwork(networkId))
+        null
     }
     override suspend fun addPrivateNetworkSubnet(networkId: Long, spec: PrivateNetworkSubnetSpec): CloudAction =
         privateNetworkSubnetAction(networkId, spec, add = true)
@@ -403,8 +455,10 @@ internal class RetrofitHCloudRepository(private val api: HCloudApi) : HCloudRepo
         privateNetworkSubnetAction(networkId, spec, add = false)
     private suspend fun privateNetworkSubnetAction(networkId: Long, spec: PrivateNetworkSubnetSpec, add: Boolean): CloudAction = safeHCloudApiCall {
         require(networkId > 0) { "Network ID must be positive" }
-        val request = NetworkSubnetRequestDto(ipRange = spec.ipRange, networkZone = spec.networkZone, gateway = spec.gateway)
-        (if (add) api.addNetworkSubnet(networkId, request) else api.deleteNetworkSubnet(networkId, request)).action.toDomain()
+        if (add) {
+            require(spec.gateway == null) { "Cloud subnet gateways are assigned by the provider" }
+            api.addNetworkSubnet(networkId, NetworkSubnetRequestDto(ipRange = spec.ipRange, networkZone = spec.networkZone)).action.toDomain()
+        } else api.deleteNetworkSubnet(networkId, DeleteNetworkSubnetRequestDto(spec.ipRange)).action.toDomain()
     }
     override suspend fun addPrivateNetworkRoute(networkId: Long, spec: PrivateNetworkRouteSpec): CloudAction =
         privateNetworkRouteAction(networkId, spec, add = true)
@@ -433,20 +487,24 @@ internal class RetrofitHCloudRepository(private val api: HCloudApi) : HCloudRepo
                 PrivateNetworkRoute(destination = route.destination, gateway = route.gateway)
             },
             serverIds = servers,
-            deleteProtected = protection.deleteProtected,
+            deleteProtected = protection?.deleteProtected ?: false,
+            protectionKnown = protection?.deleteProtected != null,
             labels = labels,
         )
-    override suspend fun attachServerToPrivateNetwork(networkId: Long, serverId: Long): CloudAction =
+    override suspend fun attachServerToPrivateNetwork(networkId: Long, serverId: Long): CloudAction = safeHCloudApiCall {
         api.attachServerToNetwork(serverId, AttachServerToNetworkRequestDto(networkId)).action.toDomain()
-    override suspend fun detachServerFromPrivateNetwork(networkId: Long, serverId: Long): CloudAction =
+    }
+    override suspend fun detachServerFromPrivateNetwork(networkId: Long, serverId: Long): CloudAction = safeHCloudApiCall {
         api.detachServerFromNetwork(serverId, DetachServerFromNetworkRequestDto(networkId)).action.toDomain()
+    }
 
     override suspend fun changePrivateNetworkProtection(networkId: Long, patch: DeleteProtectionPatch): CloudAction = safeHCloudApiCall {
         require(networkId > 0) { "Network ID must be positive" }
         api.changeNetworkProtection(networkId, DeleteProtectionPatchDto(patch.delete)).action.toDomain()
     }
 
-    override suspend fun getLoadBalancers(): List<LoadBalancerInventory> = allLoadBalancerPages().map { loadBalancer ->
+    override suspend fun getLoadBalancers(): List<LoadBalancerInventory> = safeHCloudApiCall {
+        allLoadBalancerPages().map { loadBalancer ->
         LoadBalancerInventory(
             id = loadBalancer.id,
             name = loadBalancer.name,
@@ -464,33 +522,37 @@ internal class RetrofitHCloudRepository(private val api: HCloudApi) : HCloudRepo
                 LoadBalancerService(it.protocol, it.listenPort, it.destinationPort, it.proxyProtocol)
             },
             targets = loadBalancer.targets.map { it.toDomain() },
-            deleteProtected = loadBalancer.protection.deleteProtected,
+            deleteProtected = loadBalancer.protection?.deleteProtected ?: false,
+            protectionKnown = loadBalancer.protection?.deleteProtected != null,
             labels = loadBalancer.labels,
             prices = loadBalancer.loadBalancerType.prices.map {
                 LoadBalancerLocationPrice(it.location, it.priceHourly.toDomain(), it.priceMonthly.toDomain())
             },
         )
     }
+    }
 
-    override suspend fun getLoadBalancer(loadBalancerId: Long): LoadBalancerInventory =
+    override suspend fun getLoadBalancer(loadBalancerId: Long): LoadBalancerInventory = safeHCloudApiCall {
         api.getLoadBalancer(loadBalancerId).loadBalancer.toInventory()
+    }
 
     override suspend fun deleteLoadBalancer(loadBalancerId: Long): CloudAction = safeHCloudApiCall {
         require(loadBalancerId > 0) { "Load Balancer ID must be positive" }
         api.deleteLoadBalancer(loadBalancerId).action.toDomain()
     }
 
-    override suspend fun getLoadBalancerActions(loadBalancerId: Long): List<CloudAction> {
+    override suspend fun getLoadBalancerActions(loadBalancerId: Long): List<CloudAction> = safeHCloudApiCall {
         require(loadBalancerId > 0) { "Load Balancer ID must be positive" }
-        return allLoadBalancerActionPages(loadBalancerId).map { it.toDomain() }
+        return@safeHCloudApiCall allLoadBalancerActionPages(loadBalancerId).map { it.toDomain() }
     }
 
-    override suspend fun getLoadBalancerTypes(): List<LoadBalancerTypeInventory> =
+    override suspend fun getLoadBalancerTypes(): List<LoadBalancerTypeInventory> = safeHCloudApiCall {
         allLoadBalancerTypePages().map { it.toInventory() }
+    }
 
-    override suspend fun getLoadBalancerType(loadBalancerTypeId: Long): LoadBalancerTypeInventory {
+    override suspend fun getLoadBalancerType(loadBalancerTypeId: Long): LoadBalancerTypeInventory = safeHCloudApiCall {
         require(loadBalancerTypeId > 0) { "Load Balancer type ID must be positive" }
-        return api.getLoadBalancerType(loadBalancerTypeId).loadBalancerType.toInventory()
+        return@safeHCloudApiCall api.getLoadBalancerType(loadBalancerTypeId).loadBalancerType.toInventory()
     }
 
     override suspend fun changeLoadBalancerProtection(loadBalancerId: Long, patch: DeleteProtectionPatch): CloudAction = safeHCloudApiCall {
@@ -498,12 +560,15 @@ internal class RetrofitHCloudRepository(private val api: HCloudApi) : HCloudRepo
         api.changeLoadBalancerProtection(loadBalancerId, DeleteProtectionPatchDto(patch.delete)).action.toDomain()
     }
 
-    override suspend fun getPlacementGroups(): List<PlacementGroupInventory> = allPlacementGroupPages().map { it.toDomain() }
+    override suspend fun getPlacementGroups(): List<PlacementGroupInventory> = safeHCloudApiCall {
+        allPlacementGroupPages().map { it.toDomain() }
+    }
 
-    override suspend fun getPlacementGroup(placementGroupId: Long): PlacementGroupInventory =
+    override suspend fun getPlacementGroup(placementGroupId: Long): PlacementGroupInventory = safeHCloudApiCall {
         api.getPlacementGroup(placementGroupId).placementGroup.toDomain()
+    }
 
-    override suspend fun createPlacementGroup(spec: CreatePlacementGroupSpec): CreatedPlacementGroup {
+    override suspend fun createPlacementGroup(spec: CreatePlacementGroupSpec): CreatedPlacementGroup = safeHCloudApiCall {
         require(spec.name.isNotBlank()) { "Placement group name must not be blank" }
         require(spec.type == "spread") { "Unsupported placement group type" }
         val response = api.createPlacementGroup(
@@ -513,68 +578,74 @@ internal class RetrofitHCloudRepository(private val api: HCloudApi) : HCloudRepo
                 labels = spec.labels.takeIf { it.isNotEmpty() },
             ),
         )
-        return CreatedPlacementGroup(response.placementGroup.toDomain(), response.action?.toDomain())
+        return@safeHCloudApiCall CreatedPlacementGroup(response.placementGroup.toDomain(), response.action?.toDomain())
     }
 
-    override suspend fun updatePlacementGroup(placementGroupId: Long, patch: PlacementGroupPatch): PlacementGroupInventory {
+    override suspend fun updatePlacementGroup(placementGroupId: Long, patch: PlacementGroupPatch): PlacementGroupInventory = safeHCloudApiCall {
         require(placementGroupId > 0) { "Placement group ID must be positive" }
         val response = api.updatePlacementGroup(
             placementGroupId,
             UpdatePlacementGroupRequestDto(name = patch.name?.trim(), labels = patch.labels),
         )
-        return response.placementGroup.toDomain()
+        return@safeHCloudApiCall response.placementGroup.toDomain()
     }
 
-    override suspend fun deletePlacementGroup(placementGroupId: Long) {
+    override suspend fun deletePlacementGroup(placementGroupId: Long) = safeHCloudApiCall {
         require(placementGroupId > 0) { "Placement group ID must be positive" }
         api.deletePlacementGroup(placementGroupId)
     }
 
-    override suspend fun addServerToPlacementGroup(serverId: Long, placementGroupId: Long): CloudAction {
+    override suspend fun addServerToPlacementGroup(serverId: Long, placementGroupId: Long): CloudAction = safeHCloudApiCall {
         validatePlacementGroupIds(serverId, placementGroupId)
-        return api.addServerToPlacementGroup(serverId, PlacementGroupRequestDto(placementGroupId)).action.toDomain()
+        return@safeHCloudApiCall api.addServerToPlacementGroup(serverId, PlacementGroupRequestDto(placementGroupId)).action.toDomain()
     }
 
-    override suspend fun removeServerFromPlacementGroup(serverId: Long, placementGroupId: Long): CloudAction {
+    override suspend fun removeServerFromPlacementGroup(serverId: Long, placementGroupId: Long): CloudAction = safeHCloudApiCall {
         validatePlacementGroupIds(serverId, placementGroupId)
-        return api.removeServerFromPlacementGroup(serverId, PlacementGroupRequestDto(placementGroupId)).action.toDomain()
+        return@safeHCloudApiCall api.removeServerFromPlacementGroup(serverId).action.toDomain()
     }
 
-    override suspend fun attachVolume(volumeId: Long, serverId: Long): CloudAction =
+    override suspend fun attachVolume(volumeId: Long, serverId: Long): CloudAction = safeHCloudApiCall {
         api.attachVolume(volumeId, AttachVolumeRequestDto(serverId)).action.toDomain()
+    }
 
-    override suspend fun detachVolume(volumeId: Long): CloudAction =
+    override suspend fun detachVolume(volumeId: Long): CloudAction = safeHCloudApiCall {
         api.detachVolume(volumeId).action.toDomain()
+    }
 
-    override suspend fun resizeVolume(volumeId: Long, currentSizeGb: Int, newSizeGb: Int): CloudAction {
+    override suspend fun resizeVolume(volumeId: Long, currentSizeGb: Int, newSizeGb: Int): CloudAction = safeHCloudApiCall {
         require(currentSizeGb > 0) { "Current volume size must be positive" }
         require(newSizeGb > currentSizeGb) { "New volume size must be greater than the current size" }
-        return api.resizeVolume(volumeId, ResizeVolumeRequestDto(newSizeGb)).action.toDomain()
+        return@safeHCloudApiCall api.resizeVolume(volumeId, ResizeVolumeRequestDto(newSizeGb)).action.toDomain()
     }
 
-    override suspend fun getLocations(): List<LocationOption> = allLocationPages().map { location ->
-        LocationOption(location.id, location.name, location.description.orEmpty(), location.city, location.country)
+    override suspend fun getLocations(): List<LocationOption> = safeHCloudApiCall {
+        allLocationPages().map { location ->
+        LocationOption(location.id, location.name, location.description.orEmpty(), location.city, location.country, location.networkZone)
+    }
     }
 
-    override suspend fun getLocation(locationId: Long): LocationDetails {
+    override suspend fun getLocation(locationId: Long): LocationDetails = safeHCloudApiCall {
         require(locationId > 0) { "Location ID must be positive" }
         val location = api.getLocation(locationId).location
-        return LocationDetails(
+        return@safeHCloudApiCall LocationDetails(
             id = location.id, name = location.name, description = location.description.orEmpty(),
             city = location.city, country = location.country, networkZone = location.networkZone,
         )
     }
 
-    override suspend fun getSshKeys(): List<SshKeyOption> = allSshKeyPages().map { key ->
+    override suspend fun getSshKeys(): List<SshKeyOption> = safeHCloudApiCall {
+        allSshKeyPages().map { key ->
         SshKeyOption(id = key.id, name = key.name, fingerprint = key.fingerprint)
     }
-
-    override suspend fun createSshKey(spec: CreateSshKeySpec): SshKeyOption {
-        val created = api.createSshKey(CreateSshKeyRequestDto(spec.name.trim(), spec.publicKey.trim())).ssh_key
-        return SshKeyOption(id = created.id, name = created.name, fingerprint = created.fingerprint)
     }
 
-    override suspend fun deleteSshKey(sshKeyId: Long) {
+    override suspend fun createSshKey(spec: CreateSshKeySpec): SshKeyOption = safeHCloudApiCall {
+        val created = api.createSshKey(CreateSshKeyRequestDto(spec.name.trim(), spec.publicKey.trim())).ssh_key
+        return@safeHCloudApiCall SshKeyOption(id = created.id, name = created.name, fingerprint = created.fingerprint)
+    }
+
+    override suspend fun deleteSshKey(sshKeyId: Long) = safeHCloudApiCall {
         require(sshKeyId > 0) { "SSH key ID must be positive" }
         api.deleteSshKey(sshKeyId)
     }
@@ -600,48 +671,71 @@ internal class RetrofitHCloudRepository(private val api: HCloudApi) : HCloudRepo
         )
     }
 
-    override suspend fun changeServerType(serverId: Long, serverType: String, upgradeDisk: Boolean): CloudAction = api.changeServerType(
-        serverId,
-        ChangeServerTypeRequestDto(serverType, upgradeDisk),
-    ).action.let { CloudAction(it.id, it.status) }
-
-    override suspend fun getAction(actionId: Long): CloudAction = api.getAction(actionId).action.let {
-        CloudAction(it.id, it.status)
+    override suspend fun changeServerType(serverId: Long, serverType: String, upgradeDisk: Boolean): CloudAction = safeHCloudApiCall {
+        api.changeServerType(
+            serverId,
+            ChangeServerTypeRequestDto(serverType, upgradeDisk),
+        ).action.let { CloudAction(it.id, it.status) }
     }
 
-    override suspend fun powerOn(serverId: Long): CloudAction = api.powerOn(serverId).action.toDomain()
+    override suspend fun getAction(actionId: Long): CloudAction = safeHCloudApiCall {
+        api.getAction(actionId).action.toDomain()
+    }
 
-    override suspend fun powerOff(serverId: Long): CloudAction = api.powerOff(serverId).action.toDomain()
+    override suspend fun powerOn(serverId: Long): CloudAction = safeHCloudApiCall {
+        api.powerOn(serverId).action.toDomain()
+    }
 
-    override suspend fun shutdown(serverId: Long): CloudAction = api.shutdown(serverId).action.toDomain()
+    override suspend fun powerOff(serverId: Long): CloudAction = safeHCloudApiCall {
+        api.powerOff(serverId).action.toDomain()
+    }
 
-    override suspend fun reboot(serverId: Long): CloudAction = api.reboot(serverId).action.toDomain()
+    override suspend fun shutdown(serverId: Long): CloudAction = safeHCloudApiCall {
+        api.shutdown(serverId).action.toDomain()
+    }
 
-    override suspend fun reset(serverId: Long): CloudAction = api.reset(serverId).action.toDomain()
+    override suspend fun reboot(serverId: Long): CloudAction = safeHCloudApiCall {
+        api.reboot(serverId).action.toDomain()
+    }
 
-    override suspend fun attachIso(serverId: Long, iso: IsoSelection): CloudAction =
+    override suspend fun reset(serverId: Long): CloudAction = safeHCloudApiCall {
+        api.reset(serverId).action.toDomain()
+    }
+
+    override suspend fun attachIso(serverId: Long, iso: IsoSelection): CloudAction = safeHCloudApiCall {
         api.attachIso(serverId, AttachIsoRequestDto(iso.id)).action.toDomain()
+    }
 
-    override suspend fun detachIso(serverId: Long): CloudAction = api.detachIso(serverId).action.toDomain()
+    override suspend fun detachIso(serverId: Long): CloudAction = safeHCloudApiCall {
+        api.detachIso(serverId).action.toDomain()
+    }
 
-    override suspend fun changeServerReverseDns(serverId: Long, ip: String, dnsPtr: String?): CloudAction {
+    override suspend fun changeServerReverseDns(serverId: Long, ip: String, dnsPtr: String?): CloudAction = safeHCloudApiCall {
         require(serverId > 0) { "Server ID must be positive" }
         require(ip.isNotBlank()) { "IP address must not be blank" }
-        return api.changeServerReverseDns(serverId, ServerDnsPtrRequestDto(ip, dnsPtr)).action.toDomain()
+        return@safeHCloudApiCall api.changeServerReverseDns(serverId, ServerDnsPtrRequestDto(ip, dnsPtr)).action.toDomain()
     }
-    override suspend fun resetRootPassword(serverId: Long): ResetRootPasswordResult =
+    override suspend fun resetRootPassword(serverId: Long): ResetRootPasswordResult = safeHCloudApiCall {
         api.resetRootPassword(serverId).toResetRootPasswordResult()
-    override suspend fun enableRescue(serverId: Long, spec: EnableRescueSpec): EnableRescueResult =
+    }
+    override suspend fun enableRescue(serverId: Long, spec: EnableRescueSpec): EnableRescueResult = safeHCloudApiCall {
         api.enableRescue(serverId, EnableRescueRequestDto(spec.type.apiValue, spec.sshKeyIds)).toEnableRescueResult()
-    override suspend fun disableRescue(serverId: Long): CloudAction = api.disableRescue(serverId).action.toDomain()
+    }
+    override suspend fun disableRescue(serverId: Long): CloudAction = safeHCloudApiCall {
+        api.disableRescue(serverId).action.toDomain()
+    }
 
-    override suspend fun enableBackups(serverId: Long): CloudAction = api.enableBackups(serverId).action.toDomain()
+    override suspend fun enableBackups(serverId: Long): CloudAction = safeHCloudApiCall {
+        api.enableBackups(serverId).action.toDomain()
+    }
 
-    override suspend fun disableBackups(serverId: Long): CloudAction = api.disableBackups(serverId).action.toDomain()
+    override suspend fun disableBackups(serverId: Long): CloudAction = safeHCloudApiCall {
+        api.disableBackups(serverId).action.toDomain()
+    }
 
-    override suspend fun createSnapshot(serverId: Long, description: String): CloudAction {
+    override suspend fun createSnapshot(serverId: Long, description: String): CloudAction = safeHCloudApiCall {
         require(description.isNotBlank()) { "Snapshot description must not be blank" }
-        return api.createImage(serverId, CreateImageRequestDto(description = description.trim())).action.toDomain()
+        return@safeHCloudApiCall api.createImage(serverId, CreateImageRequestDto(description = description.trim())).action.toDomain()
     }
 
     private fun ServerDto.toDomain() = Server(
@@ -655,7 +749,14 @@ internal class RetrofitHCloudRepository(private val api: HCloudApi) : HCloudRepo
         labels = labels,
         placementGroupId = placementGroup?.id,
         attachedIso = iso?.toDomain(),
-        protection = protection?.let { ServerProtection(it.delete, it.rebuild) },
+        primaryDiskSizeGb = primaryDiskSize,
+        hardware = ServerHardware(serverType.cores, serverType.memory, serverType.disk,
+            serverType.architecture, serverType.storageType, serverType.cpuType),
+        image = image?.let { ServerImageInfo(it.id, it.name, it.description, it.architecture, it.osFlavor, it.osVersion) },
+        locationDetails = location?.let { LocationDetails(it.id, it.name, it.description.orEmpty(), it.city, it.country, it.networkZone) },
+        protection = protection?.let { flags ->
+            if (flags.delete != null && flags.rebuild != null) ServerProtection(flags.delete, flags.rebuild) else null
+        },
         publicDnsPointers = buildList {
             publicNet.ipv4?.ip?.let { add(DnsPointer(it, publicNet.ipv4?.dnsPtr)) }
             publicNet.ipv6?.dnsPointers?.forEach { pointer -> add(DnsPointer(pointer.ip, pointer.dnsPtr)) }
@@ -727,7 +828,8 @@ internal class RetrofitHCloudRepository(private val api: HCloudApi) : HCloudRepo
         location = location.name,
         serverId = server,
         status = status,
-        deleteProtected = protection.deleteProtected,
+        deleteProtected = protection?.deleteProtected ?: false,
+        protectionKnown = protection?.deleteProtected != null,
         labels = labels,
     )
 
@@ -739,7 +841,8 @@ internal class RetrofitHCloudRepository(private val api: HCloudApi) : HCloudRepo
         location = location.name,
         assigneeId = assigneeId,
         assigneeType = assigneeType,
-        deleteProtected = protection.deleteProtected,
+        deleteProtected = protection?.deleteProtected ?: false,
+        protectionKnown = protection?.deleteProtected != null,
         labels = labels,
         dnsPointers = dnsPointers.map { DnsPointer(it.ip, it.dnsPtr) },
     )
@@ -774,7 +877,8 @@ internal class RetrofitHCloudRepository(private val api: HCloudApi) : HCloudRepo
 
     private fun FloatingIpDto.toDomain() = FloatingIpInventory(
         id = id, name = name, type = type, address = ip, homeLocation = homeLocation?.name,
-        assigneeId = assigneeId, assigneeType = assigneeType, deleteProtected = protection.deleteProtected,
+        assigneeId = server, assigneeType = if (server != null) "server" else null,
+        deleteProtected = protection?.deleteProtected ?: false, protectionKnown = protection?.deleteProtected != null,
         labels = labels, dnsPointers = dnsPointers.map { DnsPointer(it.ip, it.dnsPtr) },
     )
 
@@ -797,7 +901,8 @@ internal class RetrofitHCloudRepository(private val api: HCloudApi) : HCloudRepo
         publicInterface = LoadBalancerPublicInterface(publicNet.enabled, publicNet.ipv4?.ip, publicNet.ipv4?.dnsPtr, publicNet.ipv6?.ip, publicNet.ipv6?.dnsPtr),
         privateInterfaces = privateNet.map { LoadBalancerPrivateInterface(it.network, it.ip) },
         services = services.map { LoadBalancerService(it.protocol, it.listenPort, it.destinationPort, it.proxyProtocol) },
-        targets = targets.map { it.toDomain() }, deleteProtected = protection.deleteProtected, labels = labels,
+        targets = targets.map { it.toDomain() }, deleteProtected = protection?.deleteProtected ?: false, labels = labels,
+        protectionKnown = protection?.deleteProtected != null,
         prices = loadBalancerType.prices.map { LoadBalancerLocationPrice(it.location, it.priceHourly.toDomain(), it.priceMonthly.toDomain()) },
     )
 

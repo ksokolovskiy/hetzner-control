@@ -1,0 +1,8 @@
+<resources>
+    <string name="inventory_status_initializing">Подготавливается</string>
+    <string name="inventory_status_off">Выключен</string>
+    <string name="inventory_status_running">Работает</string>
+    <string name="inventory_status_starting">Включается</string>
+    <string name="inventory_status_stopping">Выключается</string>
+    <string name="inventory_status_unknown">Статус неизвестен</string>
+</resources>

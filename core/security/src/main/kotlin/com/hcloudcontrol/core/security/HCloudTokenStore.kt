@@ -13,6 +13,9 @@ data class CloudProjectConnection(
 interface HCloudTokenStore {
     /** The token for the selected project. It is never exposed to UI state. */
     fun token(): String?
+    /** Request clients bind to the original owner, never whichever project becomes active later. */
+    fun tokenForConnection(connectionId: String): String? =
+        if (activeConnectionId() == connectionId) token() else null
     /** Returns only non-secret metadata for the selected connection. */
     fun activeConnection(): CloudProjectConnection? = activeConnectionId()?.let(::connection)
     fun connection(connectionId: String): CloudProjectConnection? = connections().firstOrNull { it.id == connectionId }
