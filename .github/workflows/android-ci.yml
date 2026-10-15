@@ -21,6 +21,11 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v6
 
+      - name: Install source validation utilities
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends ripgrep
+
       - name: Set up JDK 21
         uses: actions/setup-java@v5
         with:
